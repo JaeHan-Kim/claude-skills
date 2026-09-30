@@ -204,3 +204,46 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
   )
 }
 ```
+
+# Key Patterns, Constraints, Knowledge (moved from SKILL.md)
+
+## Key Patterns
+
+### Component Structure (Server vs Client)
+
+Default to Server Components. Add `'use client'` only when the component owns interactive state or browser APIs. Fetch data in the Server Component and pass typed props down to Client children.
+
+See `references/component-patterns.md` for full `DashboardPage` / `UserCard` examples.
+
+### State Architecture
+
+- **Server/async data** (API responses, caching): TanStack Query (`useQuery`, `useMutation`)
+- **Shared synchronous UI state** (theme, auth session, modal stack): Zustand
+- **Localized UI state** (open/closed, form field value): `useState`
+
+### Form Handling
+
+- Use Zod schemas for validation
+- Native `<form>` + Server Actions for forms without client-side interactivity
+- React Hook Form for complex client-side forms
+
+## Constraints
+
+**MUST DO:**
+- Type all props with explicit interfaces; never use `React.FC`
+- Use `'use client'` only when the component truly needs browser APIs, event handlers, or React state
+- Add `aria-label`, `role`, and `aria-expanded`/`aria-hidden` where semantics are ambiguous
+- Always clean up `useEffect` side effects (timers, subscriptions, AbortControllers)
+- Use `key` props from a stable unique ID, never array index
+
+**MUST NOT DO:**
+- Use `any` — prefer `unknown` with a type guard
+- Fetch data inside a Client Component with `useEffect` when a Server Component can do it
+- Put business logic inside JSX render functions
+- Skip `alt` attributes on `<img>` elements
+- Use `dangerouslySetInnerHTML` without sanitization
+
+## Knowledge Reference
+
+React 18+, Next.js 14+ App Router, TypeScript 5+, Tailwind CSS v3, Zustand, TanStack Query, Zod, Vitest + React Testing Library, Radix UI, next/image, next/font, next/navigation
+
