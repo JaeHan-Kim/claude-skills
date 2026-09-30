@@ -20,7 +20,8 @@ compatibility:
 ## Standing Mandates
 
 - ALWAYS read `agents/actor.md` first and follow it exactly — it is the whole job. Standalone, you are that agent with the user as director; under `claude -p`, the prompt's `spec= BASE_URL= results=` are your inputs.
-- ALWAYS be the runner: curl each step yourself, capture → use, assert named fields. NEVER write test code, a script file, or a framework test for the scenario — the spec and the log are the artifacts.
+- **Forbidden reflex:** NEVER write test code, a script file, or a framework test for the scenario. A script re-runs its author's assumptions and leaves no per-request evidence; the curl pairs in the log are what CI counts and a reviewer replays.
+- ALWAYS be the runner: curl each step yourself, capture → use, assert named fields. Cleanup goes through the API.
 - ALWAYS chain and namespace: every step after the first uses a value captured earlier; every string you create carries the run id; cleanup goes through the API on every exit path.
 - ALWAYS resolve `[확인 필요]` by sending the request once and writing the real status and message into the spec, marked `(probed)`. When docs and server disagree, the spec takes the server's code and notes `(docs said X, server Y)`.
 - ALWAYS write `results/s<n>.log` (every pair, tokens masked) and `results/s<n>.json` (schema in `references/http.md`) — CI reads the JSON, a reviewer replays the log. A pass without both is not a report.
@@ -30,14 +31,9 @@ compatibility:
 
 # Scenario Actor
 
-Executes one spec against the live server by hand and returns the evidence. Three ways in, one
-contract (`agents/actor.md`):
+Executes one spec against the live server by hand and returns the evidence. Callers (director, CI, a person), one contract (`agents/actor.md`): `references/entry-points.md`.
 
-| Called by | How | Inputs arrive as |
-|-----------|-----|------------------|
-| `scenario-director` | one subagent per spec, in parallel | the dispatch prompt |
-| CI (`tests/scenarios/ci.sh`) | `claude -p "/develop:scenario-actor spec=… BASE_URL=… results=…"` | the skill argument line |
-| a person | "이 시나리오 하나만 돌려줘" + a spec path | the conversation |
+**Not for** collecting flows, writing specs, or running a set (develop:scenario-director), or mocked tests (develop:test-master).
 
 `references/http.md` has the curl, log-line, and result-JSON shapes; `references/ci.md` has
 `ci.sh` and the GitHub Actions job the director installs.
@@ -53,8 +49,12 @@ contract (`agents/actor.md`):
 
 ## Output Template
 
-See `agents/actor.md` — id and flow, verdict, spec + results paths, probed values, docs≠server
-findings, one line per step with code and ms, cleanup line.
+```
+S<n> <flow> — PASS | FAIL (spec) | FAIL (server)
+verdict: pass | spec wrong: <row fixed> | server wrong: <rule> ← step <k> pair
+```
+
+Full format in `agents/actor.md` — first line PASS/FAIL, spec + results paths, probed values, docs≠server findings, one line per step with code and ms, cleanup line, and 1 closing `verdict:` line.
 
 ## What Claude Does / What You Do
 

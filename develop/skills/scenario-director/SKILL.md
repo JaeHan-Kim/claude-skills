@@ -15,7 +15,6 @@ scenarios:
 compatibility:
   optional:
     - sequential-thinking
-    - think-tool
   remote_mcp_note: >-
     sequential-thinking이 있으면 1단계 상태 전이를 빠짐없이 나열할 때 씁니다. 실행 판단은 액터가 합니다.
 ---
@@ -30,7 +29,8 @@ compatibility:
 - ALWAYS run `ci.sh` twice against the same server process after the actors return. Run 2 differing from run 1 — in count or per scenario — is a cleanup gap and is reported as such.
 - ALWAYS keep a coverage matrix in `CATALOG.md`: every transition in the state map has a happy row and at least one refusal row, or a written reason for skipping it.
 - ALWAYS check the set is not vacuous when the server offers a fault switch (a `--bug` flag, a chaos toggle, a feature flag that breaks a rule): run `ci.sh` once against the broken server and require at least one `fail_server`. A set that passes on a broken server tests nothing.
-- NEVER invent an endpoint, field, or status code, and NEVER let an actor's report through unread. Return to the actor: a pass with no step pairs, a missing `results/s<n>.json`, an assert on a whole body, a literal host in any command, a `[확인 필요]` still in the spec, a refusal step without a verify step after it.
+- **Forbidden reflex:** NEVER invent an endpoint, field, or status code, and NEVER let an actor's report through unread. A spec built on a guessed 403 passes against nothing, and the set reads green while the server does something else.
+- Return an actor's report when it shows: a pass with no step pairs, a missing `results/s<n>.json`, an assert on a whole body, a literal host in any command, a `[확인 필요]` still in the spec, a refusal step without a verify step after it. Send the actor back once, then report the gap.
 - NEVER build state outside the API — no database inserts, no fixture edits — and never let a spec share a token or a record with another spec.
 - Goal: a catalog a teammate can extend by adding a row, a spec per flow they can read in a minute, and one `ci.sh` that gives the same pass/fail against any `BASE_URL` — locally and in CI.
 
@@ -42,8 +42,7 @@ dispatches one `scenario-actor` subagent per spec to execute it by hand. Aggrega
 evidence into one report. The director thinks in flows; the actor thinks in requests; CI runs
 the same actor through `claude -p`.
 
-**Not for** unit or single-endpoint tests with mocks (`test-master`), load tests, one
-intermittent failure (`flaky-test-analyzer`), or browser flows.
+**Not for** unit or single-endpoint tests with mocks (develop:test-master), one intermittent failure (develop:flaky-test-analyzer), load tests, or browser flows.
 
 ---
 
@@ -86,7 +85,7 @@ spec path · `BASE_URL` · results dir (`tests/scenarios/results/`) · "follow
 `scenario-actor/agents/actor.md`; run your scenario once; write your log and JSON; return the
 report." Actors resolve `[확인 필요]` by sending the request and recording the real response in
 the spec, and note `(docs said X, server Y)` when documentation lied. Read every report against
-the rejection list in the mandates; send the actor back once, then report the gap.
+the rejection list in the mandates.
 
 **5. Run `ci.sh` twice, mutation-check, report.** `BASE_URL=… tests/scenarios/ci.sh` twice
 against the same server process, in the foreground — never backgrounded: a headless director that
@@ -98,7 +97,7 @@ as run 2, and say in the report that `ci.sh` itself is unverified until the user
 terminal. If the server has a fault switch, restart it broken and run `ci.sh` once
 more: at least one `fail_server` or the set is vacuous — say which scenario should have caught it.
 Update `CATALOG.md` (run ✓, last run). Per failure: the actor's pair and its spec-or-server
-verdict. Hand over `references/ci.md`'s GitHub Actions job for the user to wire in.
+verdict. Hand over `scenario-actor/references/ci.md`'s GitHub Actions job for the user to wire in.
 
 ---
 
@@ -124,9 +123,8 @@ Run 2 (same process): 6 passed, 0 failed — no per-scenario change
 Mutation (--bug): 5 passed, 1 failed — S2 fail_server "pay accepted from CANCELLED" ✓ set is not vacuous
 Failures: none | per failure: step, request, response, verdict (spec | server), what changed
 Docs≠server: README says 403 for another user's order; server returns 404 (S3 spec updated)
+Verdict: 6 of 6 scenarios pass on both runs, mutation caught by 1 — set is non-vacuous
 ```
-
----
 
 ## What Claude Does / What You Do
 

@@ -1,10 +1,8 @@
 ---
 name: test-master
+effort: high
 description: >-
-  Use when someone needs to write, improve, or audit tests — generating unit,
-  integration, E2E, performance, or security tests, analyzing coverage gaps, or
-  producing a test plan or defect report. Triggers on: "테스트 작성", "단위 테스트", "커버리지
-  분석".
+  Use when writing, improving, or auditing tests — unit, integration, E2E, performance, security — or analyzing coverage gaps and producing a test plan. Triggers: "테스트 작성", "단위 테스트", "커버리지 분석", "write tests", "test plan".
 license: MIT
 metadata:
   author: https://github.com/Jeffallan
@@ -26,58 +24,33 @@ compatibility:
     - think-tool
   optional:
     - sequential-thinking
-    - mcp-reasoner
   remote_mcp_note: >-
     think-tool이 있으면 플레이키 실패 원인 추론과 커버리지 갭 분석이 더 정확해집니다.
+    sequential-thinking은 범위·전략 확정 전 테스트 코드 작성을 막는 데 씁니다.
     Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요.
 ---
 
+## Standing Mandates
+
+- **Forbidden reflex:** NEVER hand over a generated test you have not seen run. A test written to pass against the current code mirrors the implementation: it stays green when the behaviour breaks, and the suite then reports coverage that protects nothing. Paste each test's run output; a test never run is `[확인 필요: 미실행]`.
+- ALWAYS assert a specific outcome and cover the error path, not just the success branch; mock external dependencies, never use production data, keep every test independently runnable (examples and the full rule list: `references/quick-start.md`).
+- ALWAYS take coverage numbers from the user's coverage run. No report available → mark `[확인 필요: 커버리지 리포트]`; never estimate a percentage from reading the code.
+- NEVER rerun a flaky test until green. Classify the failure, then hand a recurring one to develop:flaky-test-analyzer.
+- Goal: every test delivered has a recorded run, every gap in the plan has a severity, and the report closes on a recountable verdict. One fix round per failing test; then report it open.
+
 # Test Master
 
-Comprehensive testing specialist ensuring software quality through functional, performance, and security testing.
+Finds what is untested and writes tests that can fail. Scope first, strategy second, code last.
 
-## When to Use / When Not to Use
-
-| Use | Skip |
-|-----|------|
-| Need to create tests from scratch | Already doing TDD (use test-driven-development) |
-| Auditing test coverage | Debugging a specific flaky test (use flaky-test-analyzer) |
-| Writing a formal test plan | Just need a code review |
-| Adding tests to untested legacy code | |
+**Not for** test-first development of a new feature (develop:test-driven-development) or one intermittent failure (develop:flaky-test-analyzer).
 
 ## Process
 
-If sequential-thinking is available, invoke it for steps 1–2 before writing any test code: explicitly complete "Define scope" and "Create strategy" as separate sequential steps, passing each step's output as input to the next. This prevents generating test files before the testing type, framework, and coverage targets are confirmed.
-
-1. **Define scope** — Identify what to test and which testing types apply
-2. **Create strategy** — Plan the test approach across functional, performance, and security perspectives
-3. **Write tests** — Implement tests with proper assertions (see example below)
-4. **Execute** — Run tests and collect results
-   - If tests fail: classify the failure (assertion error vs. environment/flakiness), fix root cause, re-run
-   - If tests are flaky: if think-tool is available, invoke it to reason through the failure chain before committing to a diagnosis; isolate ordering dependencies, check async handling, add retry or stabilization logic
-5. **Report** — Document findings with severity ratings and actionable fix recommendations
-   - Verify coverage targets are met before closing; flag gaps explicitly
-
-## Quick-Start Example
-
-A minimal Jest unit test illustrating the key patterns this skill enforces:
-
-```js
-// Good: meaningful description, specific assertion, isolated dependency
-describe('calculateDiscount', () => {
-  it('applies 10% discount for premium users', () => {
-    const result = calculateDiscount({ price: 100, userTier: 'premium' });
-    expect(result).toBe(90); // specific outcome, not just truthy
-  });
-
-  it('throws on negative price', () => {
-    expect(() => calculateDiscount({ price: -1, userTier: 'standard' }))
-      .toThrow('Price must be non-negative');
-  });
-});
-```
-
-Apply the same structure for pytest (`def test_…`, `assert result == expected`) and other frameworks.
+1. **Define scope.** Get the code and the test command from the repo; ask one line only if the repo does not answer. Identify the testing types that apply.
+2. **Create strategy.** Functional, performance, and security perspectives; framework; coverage targets. Use `sequential-thinking`, if available, to finish steps 1 and 2 as separate steps before any test file is written.
+3. **Write tests.** Specific assertions, edge cases, error paths. Load the `references/` file for the type (table below).
+4. **Execute.** Run the tests and paste the output. On failure classify it: assertion error vs environment/flakiness, fix the root cause, re-run once. For a flaky failure use `think-tool`, if available, to reason through the failure chain before naming a cause; then isolate ordering dependencies and async handling.
+5. **Report.** Findings with severity and a fix each; gaps against the user's coverage report; one row per delivered test with its run result.
 
 ## Reference Guide
 
@@ -99,39 +72,26 @@ Load detailed guidance based on context:
 | TDD Iron Laws | `references/tdd-iron-laws.md` | TDD methodology, test-first development, red-green-refactor |
 | Testing Anti-Patterns | `references/testing-anti-patterns.md` | Test review, mock issues, test quality problems |
 
-## Constraints
-
-**MUST DO**
-- Test happy paths AND error/edge cases (e.g., empty input, null, boundary values)
-- Mock external dependencies — never call real APIs or databases in unit tests
-- Use meaningful `it('…')` descriptions that read as plain-English specifications
-- Assert specific outcomes (`expect(result).toBe(90)`), not just truthiness
-- Run tests in CI/CD; document and remediate coverage gaps
-
-**MUST NOT**
-- Skip error-path testing (e.g., don't test only the success branch of a try/catch)
-- Use production data in tests — use fixtures or factories instead
-- Create order-dependent tests — each test must be independently runnable
-- Ignore flaky tests — quarantine and fix them; don't just re-run until green
-- Test implementation details (internal method calls) — test observable behaviour
+Quick-start example, MUST DO / MUST NOT rules, and the report sections: `references/quick-start.md`.
 
 ## Output Template
 
-When creating test plans, provide:
-1. Test scope and approach
-2. Test cases with expected outcomes
-3. Coverage analysis
-4. Findings with severity (Critical/High/Medium/Low)
-5. Specific fix recommendations
+```
+Scope: <what is tested, which types>
+| # | test | type | run result |
+Gaps: <n> (Critical <a> · High <b> · Medium <c> · Low <d>) — each with a fix recommendation
+Coverage: <figure from the user's report, or [확인 필요: 커버리지 리포트]>
+Verdict: <passed> of <total> delivered tests pass, <n> gaps open
+```
 
 ## What Claude Does / What You Do
 
 | Claude | You |
 |--------|-----|
-| Generates test scaffolding and assertions | Confirm test scope and edge cases |
-| Identifies coverage gaps from existing code | Run tests and share failure output |
-| Writes test plan structure | Validate that tests match business intent |
-| Suggests mocking strategies | Integrate tests into CI/CD pipeline |
+| Generates test scaffolding and assertions, and runs them | Confirm test scope and edge cases |
+| Identifies coverage gaps against your coverage report | Run coverage and share the report and failure output |
+| Writes the test plan and ranks gaps by severity | Validate that tests match business intent and decide which gaps to accept |
+| Suggests mocking strategies | Integrate tests into CI/CD |
 
 ## Related Skills
 

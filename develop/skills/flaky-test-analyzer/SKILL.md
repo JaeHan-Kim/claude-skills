@@ -1,10 +1,8 @@
 ---
 name: flaky-test-analyzer
+effort: high
 description: >-
-  Use when tests pass locally but fail in CI, pass some runs and fail others, or
-  someone suspects a test is unreliable but cannot reproduce the failure
-  consistently. Diagnoses root causes and provides concrete fixes. Triggers on:
-  "flaky test".
+  Use when tests pass locally but fail in CI, pass some runs and fail others, or a test seems unreliable and the failure won't reproduce consistently. Triggers: "flaky test", "간헐적 실패", "CI에서만 실패".
 scenarios:
   - "Our tests pass locally but randomly fail in CI — I need to fix these flaky tests"
   - "Help me diagnose why this test fails intermittently with a race condition"
@@ -18,105 +16,59 @@ compatibility:
     - sequential-thinking
   remote_mcp_note: >-
     think-tool이 있으면 간헐적 실패의 근본 원인을 더 체계적으로 추론합니다.
+    sequential-thinking은 분류 없이 수정부터 들어가는 것을 막는 데 씁니다.
     Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요.
 ---
 
+## Standing Mandates
+
+- **Forbidden reflex:** NEVER add a sleep, a retry, or a quarantine before the cause is reproduced. A sleep moves the race to a slower CI machine and the test comes back red a week later, now with the evidence gone.
+- ALWAYS state the failure category (from `references/triage-and-categories.md`) before proposing a fix — skipping triage is the primary failure mode.
+- ALWAYS take "reproduced" and "fixed" from run output with a count (failures out of N runs). Claude cannot run CI; the user's run results are the evidence.
+- NEVER name a cause the runs did not show. Cause unreproduced after the bounded reruns → `[확인 필요: 원인 미재현]`, propose logging and a next experiment, and stop.
+- NEVER commit a "re-run on failure" workaround without a ticket for the root cause.
+- Goal: one category, one cause backed by a failing-run count, one fix backed by a passing-run count. Rerun bound: 20 runs per condition (isolation, ordering, parallel); hitting it without a failure is the `[확인 필요]` result.
+
 # Flaky Test Analyzer
 
-## When to Use / When Not to Use
+Turns "it fails sometimes" into a category, a reproduced cause, and a fix checked by reruns.
 
-**Use when:**
-- A test fails intermittently without code changes
-- Tests pass locally but fail in CI
-- Re-runs are being used as a workaround (treating symptoms, not the cause)
-
-**Do not use when:**
-- The test fails consistently — that is a bug, not flakiness
-- You need to write new tests (use `test-master` or `test-driven-development`)
+**Not for** a test that fails every time — that is a bug — or writing new tests (develop:test-master) or test-first development (develop:test-driven-development).
 
 ## Process
 
-1. **Triage first** — identify the failure category before attempting a fix
-2. **Reproduce in isolation** — run only the failing test 20 times
-3. **Reproduce with ordering** — run the failing test after each other test in the suite
-4. **Add logging** — capture timestamps, thread names, and state snapshots at failure time
-5. **Check nondeterministic inputs** — search for `new Date()`, `Math.random()`, `UUID.randomUUID()`, `System.currentTimeMillis()`
-6. **Check resource cleanup** — verify `@AfterEach` teardown, unclosed streams, un-stubbed mocks
-
-If `sequential-thinking` is available, use it to work through steps 1–5 in order — skipping triage before fixing is the primary failure mode.
+1. **Triage first.** Identify the failure category from the symptom and the user's log. With `sequential-thinking`, if available, work steps 1–5 in order.
+2. **Reproduce in isolation.** The user runs only the failing test 20 times and reports failures out of 20.
+3. **Reproduce with ordering, then parallel.** Run it after each other test; then in parallel. Same bound: 20 runs each.
+4. **Add logging.** Timestamps, thread names, and state snapshots at failure time. Use `think-tool`, if available, to reason from the logs to a cause before naming one.
+5. **Check nondeterministic inputs and cleanup.** Search for `new Date()`, `Math.random()`, `UUID.randomUUID()`, `System.currentTimeMillis()`; verify `@AfterEach` teardown, unclosed streams, un-stubbed mocks.
+6. **Fix, then verify by rerun.** Fix patterns: `references/flaky-fix-patterns.md`. The user re-runs 20 times; report failures out of 20.
 
 ## Output Template
 
-For each flaky test analysis, provide:
-1. Failure category (from the triage table below)
-2. Root cause diagnosis with evidence
-3. Concrete fix (code snippet)
-4. Prevention rule for the test suite
-5. Recommended CI configuration to catch this class of flakiness earlier
+```
+Test: <name>
+Category: <from triage> — symptom: <quote from log>
+Reproduced: <n> failures in <20> runs (<isolation | ordering | parallel>) — or [확인 필요: 원인 미재현]
+Root cause: <cause> — evidence: <log line or run count>
+Fix: <code snippet>
+Verified: <n> failures in 20 runs after the fix
+Prevention rule: <one rule for the suite>
+CI config: <flag or setting that would catch this class earlier>
+Verdict: <n> of <m> flaky tests fixed and verified, <k> unreproduced
+```
 
 ## What Claude Does / What You Do
 
 | Claude | You |
 |--------|-----|
-| Identifies failure category from symptom description | Provide the test code and failure log |
-| Explains why the root cause causes intermittent failure | Run the test 20 times in isolation to confirm |
-| Provides the specific fix pattern (waitFor, Clock injection, etc.) | Implement and verify the fix |
-| Suggests `@BeforeEach` / `@AfterEach` cleanup patterns | Apply to the full test suite |
-| Recommends CI flags (random ordering, etc.) | Configure CI pipeline |
-
-## Triage: Find the Category First
-
-| Fails When | Category |
-|-----------|----------|
-| Run repeatedly in isolation | Timing dependency or resource leak |
-| Run after specific other tests | Ordering / shared state dependency |
-| Run in parallel | Concurrency or shared resource conflict |
-| Run on CI but not locally | Environment dependency (clock, timezone, path, env var) |
-| Run with real external systems | External dependency (network, DB, third-party API) |
-| Passes after a sleep/wait | Timing / async race condition |
-
-## The 5 Flakiness Categories
-
-**1. Timing Dependencies** — Asserts on async work before it completes.
-Fix: use `waitFor`/`awaitility`, event-driven signals, or inject a controllable `Clock`. Never use `Thread.sleep`.
-
-**2. Shared State Between Tests** — Tests pollute database, static variables, in-memory caches, or file system.
-Fix: reset state in `@BeforeEach`/`@AfterEach`; use `@Transactional` rollback or explicit truncate; prefer instance injection over singletons.
-
-**3. External Dependencies** — Tests call real HTTP APIs, databases, or message queues.
-Fix: mock at the boundary (WireMock, Mockito); use Testcontainers for integration tests needing a real DB.
-
-**4. Test Ordering Dependencies** — Test B implicitly relies on state created by Test A.
-Fix: self-contained setup per test; run tests in random order (`--randomly-seed=random`).
-
-**5. Concurrency and Parallelism** — Parallel tests share ports, files, or singletons.
-Fix: use port 0 (OS-assigned); inject resources so each test gets its own instance.
-
-## Fix Patterns Quick Reference
-
-| Root Cause | Fix |
-|-----------|-----|
-| Async race condition | Use `waitFor` / `awaitility`; never `Thread.sleep` |
-| System clock dependency | Inject `Clock`; use fixed clock in tests |
-| Database pollution | `@Transactional` rollback or truncate in `@BeforeEach` |
-| Static/singleton state | Reset in `@BeforeEach`/`@AfterEach`; prefer instance injection |
-| Real HTTP/DB calls | Mock with WireMock, Mockito, or Testcontainers |
-| Ordering dependency | Self-contained setup; run tests in random order |
-| Port conflict | Use port 0; never hardcode test ports |
-| Timezone sensitivity | Set `TZ=UTC` in CI; use `ZonedDateTime` not `Date` |
-| Random data collisions | Use unique test data per run (UUID prefix) |
-
-For category-specific fix code examples, see `references/flaky-fix-patterns.md`.
-
-## Prevention
-
-- Run tests in random order in CI by default
-- Quarantine any test that flakes more than 1% of runs
-- Never commit a "re-run on failure" workaround without a ticket to fix the root cause
-- Fail the build on any `@Disabled` / `@Ignore` without a linked issue
+| Identifies the failure category from symptoms | Provide the test code and failure log |
+| Explains why the cause fails intermittently | Run the test 20 times per condition and report counts |
+| Provides the specific fix pattern (waitFor, Clock injection, etc.) | Implement the fix and decide whether to quarantine |
+| Suggests cleanup patterns and CI flags (random ordering) | Configure the CI pipeline |
 
 ## Related Skills
 
-- `test-master` — writing new tests with built-in flakiness prevention
-- `test-driven-development` — TDD patterns that reduce flakiness by design
-- `chaos-engineer` — when you want to intentionally test failure behavior
+- `develop:test-master` — new tests with flakiness prevention built in
+- `develop:test-driven-development` — TDD patterns that reduce flakiness by design
+- `develop:chaos-engineer` — intentionally testing failure behaviour
