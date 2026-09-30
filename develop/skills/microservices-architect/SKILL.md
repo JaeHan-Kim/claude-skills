@@ -1,24 +1,19 @@
 ---
 name: microservices-architect
+effort: high
 description: >-
-  Use when someone needs to design or evaluate a distributed system —
-  decomposing a monolith, defining service boundaries with DDD, choosing between
-  sync and async communication, or planning resilience and observability.
-  Triggers on:.
+  Use when designing or restructuring a distributed topology — monolith decomposition, sync vs async, resilience. Not for validating one existing split (service-boundary-validator). Triggers: "마이크로서비스 설계", "모놀리스 분해".
 scenarios:
   - "Design a microservices architecture for our e-commerce monolith migration"
-  - "Help me decide service boundaries and communication patterns for this system"
-  - "Our microservices have too many dependencies — review and restructure the design"
+  - "Our microservices topology is tangled — restructure the communication and data design"
   - "모놀리스를 마이크로서비스로 전환하는 아키텍처를 설계해줘"
   - "서비스 경계와 통신 패턴을 어떻게 나눌지 도와줘"
 compatibility:
   recommended:
     - think-tool
-    - sequential-thinking
   optional: []
   remote_mcp_note: >-
-    think-tool이 있으면 아키텍처 트레이드오프 분석을 더 깊이 수행합니다.
-    sequential-thinking은 도메인 분석 → 통신 설계 → 데이터 전략 → 복원력 → 배포 순서를 강제합니다.
+    think-tool이 있으면 분해 여부와 동기/비동기 트레이드오프를 더 깊이 따질 수 있습니다.
     Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요.
 license: MIT
 metadata:
@@ -32,107 +27,57 @@ metadata:
   related-skills: devops-engineer, kubernetes-specialist, graphql-architect, architecture-designer, monitoring-expert
 ---
 
+## Standing Mandates
+
+- **Forbidden reflex:** NEVER recommend decomposition before the Step 0 prerequisites are answered. Splitting a system whose team has no CI/CD, tracing, or independent squads buys network failures and no independent deploys.
+- ALWAYS leave an unanswered Step 0 row as `[확인 필요: ○○]` and ask in one line; a guessed "we have Kubernetes" flips the outcome.
+- ALWAYS quote the evidence behind each step's validation, or mark it `[확인 필요: ○○]`. "Validation passed" written by the same pass that designed it is a claim, not a check.
+- ALWAYS label the design `proposed` with what would overturn it. Dogma ("database per service", "circuit breakers everywhere") is applied only where the evidence for that call site is quoted.
+- Goal: Step 0 outcome stated, every step 1–6 validation quoted or open, ADR closes with a count line. One pass; report open prerequisites rather than looping.
+
 # Microservices Architect
 
-Senior distributed systems architect specializing in cloud-native microservices, resilience patterns, and operational excellence.
+Designs a distributed system only after the prerequisites say it should be one — communication, data, resilience, observability, deployment.
 
-## When to Use / When Not to Use
+**Not for** validating whether one existing boundary or proposed split is real (develop:service-boundary-validator), whole-system topology or ADRs beyond the service split (develop:architecture-designer), or tuning breakers and timeouts (develop:circuit-breaker-tuner).
 
-**Use when:**
-- Designing service boundaries for a new system or monolith decomposition
-- Evaluating whether a current architecture is a distributed monolith
-- Choosing communication patterns (sync REST/gRPC vs. async events)
-- Planning resilience, observability, and deployment strategy
-
-**Do not use when:**
-- You need implementation code — use `spring-boot-engineer` for coding
-- The team has no CI/CD, no container orchestration, and < 2 independent squads — recommend a modular monolith first
+Scope: the service split — decomposition, communication, data, and resilience between services.
 
 ## Process
 
-### Step 0: Should You Use Microservices?
+0. **Should you?** Answer the five prerequisites (CI/CD per service, orchestration, tracing, two or more independent squads, ownership boundaries) from the user or repo; unanswered → `[확인 필요: ○○]`. Outcome: (a) proceed, (b) modular monolith first, (c) extract one pilot. On (b), stop here and say what would change it.
+1. **Domain hand-off.** Take bounded contexts from `develop:domain-driven-design` / `develop:event-storming`; do not redo them. None exist yet → run those first, or mark `[확인 필요: contexts]` and apply DDD to identify bounded context candidates as provisional. Each candidate has an API contract and deploys independently; owns its data where the contexts call for it — quoted or open.
+2. **Communication.** Sync vs async per operation; long-running or cross-aggregate work is async. Use `think-tool`, if available, when both fit. Latency budgets come from the user's SLA, else `[확인 필요: SLA]`.
+3. **Data.** Ownership and consistency model; no shared schema between independently deployed services unless a reason is stated — quoted or open.
+4. **Resilience.** Timeout, retry budget, and degradation path per external call; hand parameter tuning to `develop:circuit-breaker-tuner`.
+5. **Observability.** A single request traceable by correlation ID — quoted or open.
+6. **Deployment.** Probes and rollout strategy documented — quoted or open.
 
-Check prerequisites before domain analysis:
-
-| Prerequisite | Present? |
-|---|---|
-| Automated CI/CD pipeline per service | |
-| Container orchestration (Kubernetes or equivalent) | |
-| Distributed tracing (Jaeger, Zipkin, or OpenTelemetry) | |
-| Team size ≥ 2 independent squads | |
-| Clear ownership boundaries across domains | |
-
-**Outcomes:** (a) Proceed with microservices — most prerequisites met. (b) Modular monolith first — mostly absent. (c) Extract one pilot service — build operational muscle before full decomposition.
-
-### Steps 1–6
-
-1. **Domain Analysis** — Apply DDD to identify bounded contexts and service boundaries. Validation: each candidate service owns its data exclusively, has a clear public API contract, and can be deployed independently.
-2. **Communication Design** — Choose sync/async patterns. Validation: long-running or cross-aggregate operations use async messaging; only query/command pairs with sub-100ms SLA use sync calls.
-3. **Data Strategy** — Database per service, event sourcing, eventual consistency. Validation: no shared database schema exists between services.
-4. **Resilience** — Circuit breakers, retries, timeouts, bulkheads, fallbacks. Validation: every external call has an explicit timeout, retry budget, and degradation path.
-5. **Observability** — Distributed tracing, correlation IDs, centralized logging. Validation: a single request traceable end-to-end by correlation ID.
-6. **Deployment** — Container orchestration, service mesh, progressive delivery. Validation: health and readiness probes defined; canary or blue-green strategy documented.
+Step tables, per-step validations, and the constraints: `references/catalog.md`. Topic depth: `references/decomposition.md`, `references/communication.md`, `references/patterns.md`, `references/data.md`, `references/observability.md`.
 
 ## Output Template
 
-Structure output as an Architecture Decision Record (ADR):
-
-**Context:** System state and scope.
-
-**Decision:** Chosen service boundaries with rationale — why these bounded contexts and not alternatives.
-
-**Consequences:** Trade-offs accepted.
-
-**Service Inventory:**
-
+```
+Context: <state and scope> · Step 0 outcome: <a | b | c> (unmet: [확인 필요: ○○] …)
+Decision (proposed): <boundaries and why not the alternatives> — overturned if: <fact>
+Consequences: <trade-offs accepted>
 | Service | Responsibility | Data Owned | Communication | SLA |
-|---|---|---|---|---|
-
-**Additionally provide:**
-1. Service boundary diagram with bounded contexts
-2. Communication patterns (sync/async, protocols)
-3. Data ownership and consistency model
-4. Resilience patterns per integration point
-5. Deployment and infrastructure requirements
+Validations: | step | evidence quote | met / open |
+Verdict: <n> services · <n> sync hops over 3 · <n> prerequisites unmet · <n> open
+```
 
 ## What Claude Does / What You Do
 
 | Claude | You |
 |--------|-----|
-| Applies DDD to identify bounded context candidates | Provide domain expert knowledge and team structure |
-| Evaluates sync vs. async trade-offs per operation | Confirm SLA requirements and team ownership |
-| Identifies distributed monolith anti-patterns | Validate against actual deployment capabilities |
-| Generates ADR-format architecture document | Make final architectural decisions |
-| Recommends resilience patterns per integration | Implement with spring-boot-engineer or equivalent |
-
-## Reference Guide
-
-| Topic | Reference | Load When |
-|-------|-----------|-----------|
-| Service Boundaries | `references/decomposition.md` | Monolith decomposition, bounded contexts |
-| Communication | `references/communication.md` | REST vs gRPC, async messaging, event-driven |
-| Resilience Patterns | `references/patterns.md` | Circuit breakers, bulkhead, retry, health checks |
-| Data Management | `references/data.md` | Database per service, Saga, Event Sourcing, CQRS |
-| Observability | `references/observability.md` | Distributed tracing, correlation IDs, metrics |
-
-## Constraints
-
-**MUST DO:**
-- Apply DDD for service boundaries
-- Use database per service pattern
-- Implement circuit breakers for external calls
-- Add correlation IDs to all requests
-- Use async communication for cross-aggregate operations
-
-**MUST NOT DO:**
-- Share databases between services
-- Use synchronous calls for long-running operations
-- Create chatty service interfaces (> 3 sync hops in user-facing request path)
-- Deploy without observability
+| Checks the prerequisites and proposes boundaries and patterns with what would overturn them | Answer the prerequisites and provide team structure and SLAs |
+| Quotes evidence for each validation and marks the rest open | Confirm against your real deployment capability |
+| Writes the ADR-format document | Make the final architectural decision and implement it |
 
 ## Related Skills
 
-- `service-boundary-validator` — validate proposed boundaries for distributed monolith patterns
-- `event-storming` — discover bounded contexts before designing services
-- `spring-boot-engineer` — implement the services after architecture is defined
+- `develop:service-boundary-validator` — validate proposed boundaries for distributed monolith patterns
+- `develop:event-storming` — discover bounded contexts before designing services
+- `develop:circuit-breaker-tuner` — tune breakers, bulkheads, and timeouts
+- `develop:spring-boot-engineer` — implement the services after architecture is defined
 - `write:plans` (ADR format) — document the architectural decisions
