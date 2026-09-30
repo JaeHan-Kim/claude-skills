@@ -115,6 +115,7 @@ Step 4로 바로 갑니다.
 `architecture-designer` → `microservices-architect`(모놀리스 유지면 생략) →
 `write:plans` (ADR format). 마지막 ADR 단계만은 절대 건너뛰지 않습니다. 신규 시스템이나
 모놀리스 → MSA 검토용이고, 안정된 기존 아키텍처 안에서 반복 작업할 때는 개별 스킬을 쓰세요.
+이 워크플로 이후의 더 넓은 엔지니어링 사이클은 `dev-quality-workflow`입니다.
 
 ```
 주문 모놀리스를 서비스로 쪼갤지 결정해야 합니다. architecture workflow로 진행해주세요.
@@ -128,7 +129,8 @@ Step 4로 바로 갑니다.
 3단계 — 먼저 쓰기 → 커버리지 전략 → CI 안정화. `test-driven-development` → `test-master` →
 `flaky-test-analyzer` 순으로 구동합니다. 테스트 없는 기존 코드에 추가하는 상황이면 Step 1을
 건너뛰고 Step 2부터, CI가 재실행 꼼수 없이 이미 녹색이면 Step 3을 건너뜁니다. 이미 커버된 코드에
-테스트 하나 추가하는 작업이나, 항상 실패하는 테스트(그건 버그입니다)에는 쓰지 않습니다.
+테스트 하나 추가하는 작업이나, 항상 실패하는 테스트(그건 버그입니다)에는 쓰지 않습니다. 아키텍처부터 장애 대응까지의 전체 사이클은
+`dev-quality-workflow`입니다.
 
 ```
 커버리지 20%에 CI가 하루 한 번은 빨간불입니다. testing workflow 돌려주세요.
@@ -175,7 +177,7 @@ database workflow로 네 레이어 전부 점검해주세요.
 뒤집을 정확한 프로덕션 변경을 먼저 적어야 합니다 — 희망이 아니라 **falsifiability probe**입니다.
 그다음 예측한 이유로 실제 실패하는지 봅니다. 테스트가 바로 통과하면 이미 있는 코드를 검사하고
 있다는 뜻이니 테스트를 다시 씁니다. 일회성 프로토타입, 생성된 코드, 설정 파일, 테스트 없는 레거시에
-테스트를 붙이는 경우(`test-master` 사용)에는 건너뜁니다.
+테스트를 붙이는 경우(`test-master` 사용)에는 건너뜁니다. 간헐적 실패는 `flaky-test-analyzer`입니다.
 
 ```
 서킷 브레이커 open/close 로직을 TDD로 구현해주세요. 각 테스트마다 실행 전에
@@ -216,7 +218,8 @@ Postman/`.http` 컬렉션, 하루치 접근 로그, 닫힌 장애 이슈, 그리
 둡니다. 아무도 테스트 코드를 쓰지 않습니다: 디렉터는 `ci.sh`를 복사해 넣고, 스펙마다
 `scenario-actor` 서브에이전트를 한 턴에 띄우고, 스텝 쌍이나 결과 JSON 없이 돌아온 통과는
 돌려보내고, 같은 서버 프로세스에 `ci.sh`를 두 번 돌리고(2회차가 다르면 정리 누락), 서버에 결함
-스위치가 있으면 깨진 서버에도 한 번 돌려 세트가 공허하지 않음을 증명합니다.
+스위치가 있으면 깨진 서버에도 한 번 돌려 세트가 공허하지 않음을 증명합니다. mock을 쓰는 단위·단일 엔드포인트 테스트는 `test-master`,
+간헐적 실패 하나는 `flaky-test-analyzer`이며, 부하 테스트와 브라우저 흐름은 대상이 아닙니다.
 
 ```
 시나리오 md로 써놨어, 이거 읽고 서버에 돌려줘. mock 말고.
@@ -231,7 +234,8 @@ fail_server`, 스텝, probe 값, docs≠server 발견)을 남깁니다. `[확인
 채우고, README가 말한 코드를 서버가 부정하면 `(docs said 403, server 404)`로 기록합니다. 계약
 하나(`agents/actor.md`)로 세 경로: 디렉터의 서브에이전트, CI의 `tests/scenarios/ci.sh`가 띄우는
 `claude -p "/develop:scenario-actor spec=… BASE_URL=…"`(`references/ci.md`에 스크립트와 GitHub
-Actions 잡, 결과는 JUnit으로 병합), 흐름 하나만 단독.
+Actions 잡, 결과는 JUnit으로 병합), 흐름 하나만 단독. 흐름 수집·스펙 작성·세트 실행은 `scenario-director`, mock 테스트는
+`test-master`입니다.
 
 픽스처 주문 API(`scenario-director/evals/`, 함정 셋: 이메일 유니크, 상태 코드를 틀리게 쓴 README, `--bug` 스위치)로 측정했습니다. 액터 벤치 3런 × spec 4 × 정상 + `--bug`: haiku·sonnet 모두 12/12 통과, `[확인 필요]` 전부 spec에 probe 기록, README의 403 거짓을 404로 기록, 심은 버그를 `fail_server`로 검출, false pass 0 — 액터당 haiku $0.09 vs sonnet $0.20이라 `ci.sh` 기본값은 haiku. 디렉터 E2E, 산출된 `ci.sh`를 실제로 재실행하는 12점 채점: 무스킬 2/12, 1.3.0 코드 러너 7/12, 1.4.0 12/12.
 
@@ -239,8 +243,8 @@ Actions 잡, 결과는 JUnit으로 병합), 흐름 하나만 단독.
 
 어떤 실행에선 통과하고 어떤 실행에선 실패하는 테스트를 진단하고, 재시도를 덧붙이는 대신 원인을
 고칩니다. 먼저 실패 유형을 분류하고, 실패 테스트만 20회 격리 실행으로 재현한 뒤, 실행 순서를
-바꿔가며 테스트 간 오염을 잡아냅니다. 항상 실패하는 테스트(그건 버그)나 새 테스트 작성에는 쓰지
-않습니다.
+바꿔가며 테스트 간 오염을 잡아냅니다. 항상 실패하는 테스트(그건 버그)나 새 테스트 작성(`test-master`), 테스트 우선 개발
+(`test-driven-development`)에는 쓰지 않습니다.
 
 ```
 이 통합 테스트 3개가 CI에서 5번에 1번꼴로 실패하는데 로컬은 항상 녹색입니다.
@@ -304,8 +308,8 @@ RDS Postgres가 매일 오후만 되면 느려지는데 쿼리 하나씩 보면 
 아키텍처 결정을 처음부터 내리고 문서로 남깁니다. 시스템 토폴로지(모놀리스, 모듈러 모놀리스,
 마이크로서비스), 확장성 트레이드오프, DB·인프라 선택, 그리고 중요한 결정마다 ADR을 만듭니다.
 장점 나열이 아니라 대안을 명시적으로 평가하고 실패 모드를 함께 설계합니다. 레이어 의존성 규칙은
-`clean-architecture`, 바운디드 컨텍스트 모델링은 `domain-driven-design`, 구현 코드는 해당
-언어 스킬입니다.
+`clean-architecture`, 바운디드 컨텍스트 모델링은 `domain-driven-design`, 구현 코드는
+`spring-boot-engineer`나 `kotlin-specialist`입니다.
 
 ```
 신규 분석 플랫폼, 피크 초당 5만 이벤트, 팀은 소규모입니다. 토폴로지를 비교하고
@@ -336,7 +340,7 @@ critique와 integrate가 그 이음새를 읽습니다.
 
 이벤트를 통한 도메인 발견을 3단계로 진행합니다. Big Picture(도메인 전체, 바운디드 컨텍스트,
 문제 지점) → Process Level → Design Level. 새 제품을 시작할 때, 레거시를 풀어헤칠 때, 도메인
-모델링을 어디서 시작해야 할지 모를 때 쓰세요. 도메인이 이미 잘 모델링되어 안정적이면 필요 없고,
+모델링을 어디서 시작해야 할지 모를 때 쓰세요. 도메인이 이미 잘 모델링되어 안정적이면(`domain-driven-design`) 필요 없고,
 코드 산출물이 필요하면 먼저 이걸 돌린 뒤 `microservices-architect`나 `spring-boot-engineer`로
 넘기세요.
 
@@ -373,13 +377,13 @@ critique와 integrate가 그 이음새를 읽습니다.
 ### `clean-architecture`
 
 엔티티 → 유스케이스 → 인터페이스 어댑터 → 프레임워크/드라이버로 관심사를 분리하고, 비즈니스
-로직이 HTTP 핸들러나 ORM으로 새어 나갔을 때 의존성 규칙을 강제합니다. 현재 아키텍처를 0~10점으로
-채점하고 의존성 규칙 위반을 하나씩 지적한 뒤, 프레임워크 없이도 유스케이스를 테스트할 수 있도록
-포트와 어댑터를 설계합니다. 코드 레벨 네이밍·함수 크기는 `clean-code`, 바운디드 컨텍스트 모델링은
+로직이 HTTP 핸들러나 ORM으로 새어 나갔을 때 의존성 규칙을 강제합니다. 바깥쪽 import를 grep으로 세고
+(importer → imported, `file:line`), 위반마다 역전 하나를 계획하며 남는 개수는 예상치로 표기하고,
+프레임워크 없이도 유스케이스를 테스트할 수 있도록 포트와 어댑터를 설계해 테스트를 돌려 확인합니다. 코드 레벨 네이밍·함수 크기는 `clean-code`, 바운디드 컨텍스트 모델링은
 `domain-driven-design`이며, 단순 스크립트에는 과합니다.
 
 ```
-컨트롤러가 400줄이고 JPA 리포지토리를 직접 호출합니다. 현재 레이어링을 채점하고
+컨트롤러가 400줄이고 JPA 리포지토리를 직접 호출합니다. 바깥쪽 import를 세고
 의존성 위반을 나열한 뒤 포트-어댑터 리팩토링안을 보여주세요.
 ```
 
@@ -388,7 +392,9 @@ critique와 integrate가 그 이음새를 읽습니다.
 분산 시스템을 설계하고 평가합니다. 모놀리스 분해, DDD 기반 서비스 경계, 동기 vs 비동기 통신,
 데이터 전략, 복원력, 관측성을 다룹니다. 첫 질문은 "마이크로서비스가 필요한가"입니다 — CI/CD도
 컨테이너 오케스트레이션도 없고 독립 스쿼드가 2개 미만이면 모듈러 모놀리스를 먼저 권합니다.
-구현 코드는 `spring-boot-engineer`입니다.
+단일 경계·분할안이 실제인지 검증하는 일은 `service-boundary-validator`,
+시스템 전체 토폴로지·ADR 문서화는 `architecture-designer`, 브레이커·타임아웃 튜닝은
+`circuit-breaker-tuner`, 구현 코드는 `spring-boot-engineer`입니다.
 
 ```
 이커머스 모놀리스, 엔지니어 12명 3개 스쿼드, 쿠버네티스는 이미 있습니다.
@@ -401,8 +407,9 @@ critique와 integrate가 그 이음새를 읽습니다.
 
 프로덕션 신뢰성 체계를 세웁니다. SLI/SLO와 에러 버짓, 골든 시그널 알림과 대시보드, 장애 런북,
 자동화를 통한 토일 감소, 용량 계획을 다룹니다. 설정을 생성하기 전에 관측 스택부터 확인합니다 —
-레퍼런스 예제는 Prometheus/Kubernetes 기준입니다. 카오스 실험 설계는 `chaos-engineer`,
-인프라 프로비저닝은 대상이 아닙니다.
+레퍼런스 예제는 Prometheus/Kubernetes 기준입니다. 카오스 실험 설계는 `chaos-engineer`, 진행 중인 장애는
+`incident-response-playbook`, 브레이커 튜닝은 `circuit-breaker-tuner`, 인프라 프로비저닝은
+대상이 아닙니다.
 
 ```
 사용자 대면 API 3개의 SLO와 에러 버짓을 정의하고 골든 시그널 알림과 온콜 로테이션까지
@@ -415,7 +422,8 @@ critique와 integrate가 그 이음새를 읽습니다.
 학습. 다른 무엇보다 심각도를 먼저 분류하는데, 심각도가 에스컬레이션과 공지 주기를 결정하기
 때문입니다. 완화(서비스 복구)와 조사(원인 규명)를 분리해 서로를 막지 않게 합니다. RCA는 개인을
 비난하지 않고 항상 타임라인 재구성을 포함합니다. 진행 중인 장애에도, 사전에 플레이북을 만들 때도
-씁니다.
+씁니다. SLO 설계는 `sre-engineer`, 선제적 장애 테스트는 `chaos-engineer`, 단독 슬로 쿼리는
+`database-optimizer`입니다.
 
 ```
 체크아웃이 8분째 에러입니다. 심각도 분류하고, 지금 당장 올릴 Slack 공지 문구를 주고,
@@ -461,7 +469,8 @@ Slack·상태 페이지 공지 템플릿과 RCA 포맷(요약, 타임라인, 근
 벌크헤드, 타임아웃, 폴백을 설정하고 튜닝합니다. `failureRateThreshold`,
 `waitDurationInOpenState`, `minimumNumberOfCalls`를 잡고, COUNT_BASED와 TIME_BASED 슬라이딩
 윈도우를 선택하며, 오탐으로 브레이커가 열릴 때 HALF_OPEN 프로브 동작을 수정합니다. 느린 SQL이나
-인덱스 문제, 카오스 실험 설계(`chaos-engineer`)는 대상이 아닙니다.
+인덱스 문제(`database-optimizer`), 카오스 실험 설계(`chaos-engineer`), 풀 사이징
+(`connection-pool-tuner`)은 대상이 아닙니다.
 
 ```
 결제 브레이커가 프로바이더는 멀쩡한데 하루에도 몇 번씩 열립니다. 거기 p99는 800ms입니다.
@@ -473,7 +482,8 @@ Slack·상태 페이지 공지 템플릿과 RCA 포맷(요약, 타임라인, 근
 통제된 장애 실험을 설계합니다. 네트워크 지연, 파드 삭제, 존 장애 등을 가설·정상 상태 지표·제한된
 블라스트 반경·안전 장치·스크립트 롤백과 함께 구성하고, 게임 데이 훈련도 계획합니다. 모니터링
 스택이 없으면 진행하지 않습니다 — 지표 없이는 정상 상태를 확인할 수 없기 때문입니다. 진행 중인
-장애 대응은 `incident-response-playbook` 또는 `sre-engineer`입니다.
+장애는 `incident-response-playbook`, SLO 작업은 `sre-engineer`, 브레이커 임계값 설정은
+`circuit-breaker-tuner`입니다.
 
 ```
 쿠버네티스 체크아웃 경로로 게임 데이를 준비해주세요. 파드 킬 먼저, 그다음 AZ 장애.
@@ -485,7 +495,8 @@ Slack·상태 페이지 공지 템플릿과 RCA 포맷(요약, 타임라인, 근
 기존 Dockerfile을 분석해 레이어 캐싱, 이미지 크기, 빌드 속도, 보안에 대한 구체적인 before/after
 수정안을 냅니다. 2패스 방식입니다. 먼저 8개 체크 전체를 훑어 모든 문제를 기록하고, 그다음 수정을
 적용합니다 — 눈에 띄는 하나를 고치다가 서로 얽힌 다른 문제를 놓치지 않기 위해서입니다. 쿠버네티스
-매니페스트, docker-compose 오케스트레이션, 런타임 보안 정책(AppArmor, seccomp)은 대상이 아닙니다.
+매니페스트, docker-compose 오케스트레이션, 런타임 보안 정책(AppArmor, seccomp)은 대상이 아닙니다. 프로덕션 배포와 헬스 체크는
+`sre-engineer`입니다.
 
 ```
 이미지가 1.8GB고 코드 한 줄만 바꿔도 npm install이 다시 돕니다. Dockerfile 첨부합니다.
@@ -503,7 +514,8 @@ Slack·상태 페이지 공지 템플릿과 RCA 포맷(요약, 타임라인, 근
 Spring Boot 3.x 기반 Java 백엔드를 만들고 확장합니다. REST API, Spring Security 6와 인증,
 Spring Data JPA, WebFlux 리액티브 엔드포인트, 캐싱, 트랜잭션 관리, 검증을 다룹니다. 코딩 전에
 데이터 접근과 보안을 설계하고 확인받은 뒤, 생성자 주입과 레이어 구조로 구현합니다. 서비스 분해
-결정은 `microservices-architect`, Kotlin 관용구는 `kotlin-specialist`와 함께 쓰세요.
+결정은 `microservices-architect`, `@Transactional` 경계 감사는 `transaction-boundary-reviewer`,
+Kotlin 관용구는 `kotlin-specialist`와 함께 쓰세요.
 
 ```
 회원 서비스 REST API를 만들어주세요. Spring Security 6 JWT 인증, JPA 영속화,
@@ -527,7 +539,7 @@ GlobalScope 남발 말고 스코프와 취소를 제대로 다뤄주세요.
 UI를 만들고 고칩니다. React 컴포넌트, 레이아웃, 클라이언트 인터랙션, 데이터 패칭 훅, 스타일링,
 폼 처리를 다룹니다. 프로젝트에 별도 지정이 없으면 Next.js App Router + TypeScript + Tailwind가
 기본입니다. 구현 전에 props·state·API 타입을 정의하고, 레이아웃 셸부터 톱다운으로 만듭니다.
-Vue·Svelte·Angular나 백엔드 API는 대상이 아닙니다.
+Vue·Svelte·Angular나 백엔드 API(`spring-boot-engineer`)는 대상이 아닙니다.
 
 ```
 Next.js 앱에 대시보드 페이지를 만들어주세요. 서버 사이드 데이터 패칭, 필터 컨트롤,
@@ -553,13 +565,14 @@ REST API, SRE 파이프라인 연동만 필요한 경우(`sre-engineer`)는 제�
 
 ### `clean-code`
 
-나중에 읽을 사람을 위해 코드를 리뷰하고 리팩토링합니다. 0~10점으로 채점해 점수를 명시한 뒤,
-네이밍·함수·주석·에러 처리·테스트 카테고리별로 구체적인 위반과 각각의 리팩토링을 제시합니다. PR
+나중에 읽을 사람을 위해 코드를 리뷰하고 리팩토링합니다. 스멜을 네이밍·함수·주석·
+에러 처리·테스트 카테고리별로 `file:line` 인용과 함께 세고 각각의 리팩토링을 제시하며, 점수로
+평가하지 않습니다. PR
 피드백, 레거시 정리, 네이밍 결정에 쓰세요. 아키텍처 레이어 결정은 `clean-architecture`, 도메인
 모델링은 `domain-driven-design`, 성능 작업은 프로파일링이 먼저입니다.
 
 ```
-이 300줄짜리 서비스 클래스 가독성 리뷰해주세요. 점수와 구체적인 스멜,
+이 300줄짜리 서비스 클래스 가독성 리뷰해주세요. 스멜 개수와 구체적인 스멜,
 그리고 우선순위 순 리팩토링을 주세요 — 오후 반나절밖에 없습니다.
 ```
 
@@ -580,7 +593,8 @@ REST API, SRE 파이프라인 연동만 필요한 경우(`sre-engineer`)는 제�
 문서 한 장을 더 쓰는 대신 문서 체계를 설계합니다. 이미 있는 것을 먼저 감사하고, 커버리지 맵을
 만들고, 효과가 가장 큰 누락 문서를 씁니다. 권고하는 모든 문서에는 독자와 유지보수 책임자가
 지정되고, 최신 상태를 유지할 계획 없이는 아무것도 권고하지 않습니다 — 나쁜 문서는 잘못된 확신을
-주기 때문에 없는 것보다 나쁩니다.
+주기 때문에 없는 것보다 나쁩니다. 인라인 docstring이나 API 스펙은 `code-documenter`, ADR·설계 문서
+문장은 `write:plans`, 아키텍처 다이어그램은 `architecture-designer`입니다.
 
 ```
 문서가 위키 세 곳에 흩어져 있고 절반은 오래됐습니다. 있는 걸 감사하고 독자별로
@@ -601,10 +615,10 @@ REST API, SRE 파이프라인 연동만 필요한 경우(`sre-engineer`)는 제�
 
 대부분의 스킬은 frontmatter에 `compatibility`를 선언합니다. `think-tool`은 트레이드오프를
 명시적으로 저울질해야 하는 곳 — 아키텍처 패턴, SLO 목표, 격리 수준, 서킷 브레이커 임계값, 카오스
-블라스트 반경 — 에서 권장됩니다. `sequential-thinking`은 순서 자체가 핵심인 곳에서 권장됩니다.
-데이터베이스·성능 스킬의 베이스라인 → 변경 → 검증, 장애 대응의 탐지 → 트리아지 → 완화 → RCA,
-그리고 모든 `*-workflow`가 여기 해당합니다. `mcp-reasoner`는 판단 비중이 가장 큰 설계 스킬에
-optional로 붙습니다.
+블라스트 반경 — 에서 권장됩니다. `sequential-thinking`은 optional이며 순서를 강제하는 데 씁니다:
+`database-optimizer`, `connection-pool-tuner`, `flaky-test-analyzer`, `test-master`,
+`scenario-director`, `database-workflow`. `architecture-workflow`와 `testing-workflow`는
+`think-tool`을 권장합니다. `dev-quality-workflow`와 `operations-workflow`는 MCP 도구를 선언하지 않습니다.
 
 연결되어 있지 않다면 Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요. 없어도
 스킬은 동작하고, 판단 단계의 구조화 정도만 달라집니다.

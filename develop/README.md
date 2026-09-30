@@ -116,7 +116,7 @@ is well understood) → `domain-driven-design` → `service-boundary-validator` 
 → `architecture-designer` → `microservices-architect` (optional if staying on a monolith) →
 `write:plans` (ADR format), which is the one step never skipped. Use it for a new system or a
 monolith-to-MSA evaluation; for iterating inside an existing stable architecture, call the
-individual skill instead.
+individual skill instead. The wider engineering cycle after it is `dev-quality-workflow`.
 
 ```
 We're deciding whether to break the order monolith into services. Take me through the
@@ -131,7 +131,8 @@ Three steps: write first → strategize coverage → stabilize CI. Drives
 `test-driven-development` → `test-master` → `flaky-test-analyzer`. Step 1 is skipped when you are
 adding tests to existing untested code (go straight to Step 2), Step 3 when CI is already green
 without re-run workarounds. Not for a single test on already-covered code, and not for tests that
-fail *consistently* — those are bugs, not flakiness.
+fail *consistently* — those are bugs, not flakiness. For the full architecture-to-incident cycle use
+`dev-quality-workflow`.
 
 ```
 Our service has 20% coverage and CI goes red about once a day. Run the testing workflow —
@@ -179,7 +180,8 @@ Red-green-refactor with an evidence gate. Before running a RED test you must nam
 production change that would flip it to failing — a **falsifiability probe**, not a hope — then
 watch it fail for that predicted reason. A test that passes immediately means you are exercising
 code that already exists; rewrite it. Skip it for throwaway prototypes, generated code, config
-files, or when adding tests to untested legacy (use `test-master`).
+files, or when adding tests to untested legacy (use `test-master`). For an intermittent failure use
+`flaky-test-analyzer`.
 
 ```
 Implement the circuit breaker open/close logic with TDD. For each test, name the breaking
@@ -222,7 +224,8 @@ scenario the user wrote in their own words is normalized into the spec table
 code: the director copies `ci.sh` in, dispatches one `scenario-actor` subagent per spec in one turn,
 rejects any pass without step pairs or a result JSON, runs `ci.sh` twice on the same server process
 (a differing run 2 is a cleanup gap), and — when the server has a fault switch — once against the
-broken server to prove the set is not vacuous.
+broken server to prove the set is not vacuous. Not for unit or single-endpoint tests with mocks (use
+`test-master`), one intermittent failure (use `flaky-test-analyzer`), load tests, or browser flows.
 
 ```
 시나리오 md로 써놨어, 이거 읽고 서버에 돌려줘. mock 말고.
@@ -238,7 +241,8 @@ resolved by sending the request once; a README code the server contradicts is re
 `(docs said 403, server 404)`. Same contract (`agents/actor.md`) three ways in: the director's
 subagent, `claude -p "/develop:scenario-actor spec=… BASE_URL=…"` from `tests/scenarios/ci.sh` in CI
 (`references/ci.md` has the script and a GitHub Actions job; results merge into JUnit), or alone for
-one flow.
+one flow. Not for collecting flows, writing specs, or running a set (use `scenario-director`), or
+mocked tests (use `test-master`).
 
 Measured on the fixture order API (`scenario-director/evals/`, three traps: unique email, README that lies about a status code, `--bug` switch). Actor bench, 3 runs × 4 specs × healthy + `--bug`: haiku and sonnet both 12/12 pass, every `[확인 필요]` probed into the spec, the 403 lie recorded as 404, the planted bug caught as `fail_server`, zero false passes — haiku at $0.09 per actor vs sonnet's $0.20, so `ci.sh` defaults to haiku. Director end to end, 12-point scorer that re-runs the produced `ci.sh`: no skill 2/12, 1.3.0 code runner 7/12, 1.4.0 12/12.
 
@@ -247,7 +251,8 @@ Measured on the fixture order API (`scenario-director/evals/`, three traps: uniq
 Diagnoses tests that pass some runs and fail others, then fixes the cause rather than adding a
 retry. Triages the failure category first, reproduces the test in isolation over 20 runs, and
 reproduces it under different orderings to catch inter-test pollution. Not for tests that fail
-consistently — that is a bug — and not for writing new tests.
+consistently — that is a bug — and not for writing new tests (use `test-master`) or test-first
+development (use `test-driven-development`).
 
 ```
 These three integration tests fail in CI maybe one run in five, always green locally.
@@ -316,7 +321,8 @@ Makes and documents architectural decisions from scratch: system topology (monol
 monolith, microservices), scalability trade-offs, database and infrastructure selection, and ADRs
 for every significant choice. It evaluates alternatives explicitly and plans for failure modes
 rather than listing benefits. Not for internal layer dependency rules (use `clean-architecture`),
-bounded-context modeling (use `domain-driven-design`), or writing implementation code.
+bounded-context modeling (use `domain-driven-design`), or writing implementation code (use
+`spring-boot-engineer` or `kotlin-specialist`).
 
 ```
 Greenfield analytics platform, 50k events/sec at peak, small team. Compare topologies,
@@ -349,8 +355,8 @@ docs, and critique and integrate read its seams.
 Facilitates domain discovery through events, in three levels: Big Picture (whole domain, bounded
 contexts, pain points), Process Level, then Design Level. Use it when starting a new product,
 untangling a legacy system, or when someone asks where domain modeling should even begin. Not when
-the domain is already well modeled and stable, and not for producing code — run it first, then
-hand off to `microservices-architect` or `spring-boot-engineer`.
+the domain is already well modeled and stable (use `domain-driven-design`), and not for producing
+code — run it first, then hand off to `microservices-architect` or `spring-boot-engineer`.
 
 ```
 We're rebuilding the warehouse system and nobody agrees on how receiving actually works.
@@ -387,14 +393,15 @@ tables and call each other synchronously in both directions.
 
 Separates concerns across layers — entities, use cases, interface adapters, frameworks/drivers —
 and enforces the dependency rule when business logic has leaked into HTTP handlers or the ORM. It
-scores the current architecture 0–10, names each dependency-rule violation, and designs ports and
-adapters so the use cases are testable without the framework. Not for code-level naming and
+counts outward imports by grep (importer → imported, `file:line`), plans one inversion per
+violation with the remaining count labeled as projected, and designs ports and adapters so the use
+cases are testable without the framework — checked by running the tests. Not for code-level naming and
 function size (use `clean-code`), bounded-context modeling (use `domain-driven-design`), or simple
 scripts.
 
 ```
-Our controllers are 400 lines and query JPA repositories directly. Score the current
-layering, list the dependency violations, and show me the ports-and-adapters refactor.
+Our controllers are 400 lines and query JPA repositories directly. Count the outward
+imports, list the dependency violations, and show me the ports-and-adapters refactor.
 ```
 
 ### `microservices-architect`
@@ -402,8 +409,10 @@ layering, list the dependency violations, and show me the ports-and-adapters ref
 Designs and evaluates distributed systems: monolith decomposition, service boundaries via DDD,
 sync vs. async communication, data strategy, resilience, and observability. It starts by asking
 whether microservices are warranted at all — with no CI/CD, no container orchestration, and fewer
-than two independent squads it recommends a modular monolith instead. Not for implementation code
-(use `spring-boot-engineer`).
+than two independent squads it recommends a modular monolith instead. Not for validating whether one
+existing boundary or proposed split is real (use `service-boundary-validator`), documenting
+topology or ADRs across the whole system (use `architecture-designer`), tuning breakers and
+timeouts (use `circuit-breaker-tuner`), or implementation code (use `spring-boot-engineer`).
 
 ```
 E-commerce monolith, 12 engineers in three squads, Kubernetes already in place. Design
@@ -417,7 +426,8 @@ the decomposition — service boundaries, communication patterns, and data owner
 Establishes production reliability practice: SLIs and SLOs with error budgets, golden-signal
 alerting and dashboards, incident runbooks, toil reduction, and capacity planning. It confirms
 your observability stack before generating any config — reference examples default to
-Prometheus/Kubernetes. Not for designing chaos experiments (use `chaos-engineer`) or provisioning
+Prometheus/Kubernetes. Not for designing chaos experiments (use `chaos-engineer`), an active incident (use
+`incident-response-playbook`), tuning breakers (use `circuit-breaker-tuner`), or provisioning
 infrastructure.
 
 ```
@@ -431,7 +441,8 @@ Runs the developer-side incident lifecycle: detect → triage → communicate �
 learn. Severity is classified before anything else, because it drives escalation and update
 cadence, and mitigation is kept separate from investigation so neither blocks the other. RCAs are
 blameless and always include a reconstructed timeline. Use it during an active incident or when
-building the playbook in advance.
+building the playbook in advance. Not for designing SLOs (use `sre-engineer`), proactive failure
+testing (use `chaos-engineer`), or slow queries in isolation (use `database-optimizer`).
 
 ```
 Checkout has been erroring for 8 minutes. Classify severity, give me the Slack update to
@@ -479,7 +490,8 @@ Configures and tunes circuit breakers, bulkheads, timeouts, and fallbacks so a s
 downstream stops exhausting the caller's threads and connections. Sets `failureRateThreshold`,
 `waitDurationInOpenState`, and `minimumNumberOfCalls`, chooses between COUNT_BASED and TIME_BASED
 sliding windows, and fixes HALF_OPEN probe behavior when the breaker trips on false positives.
-Not for slow SQL or missing indexes, and not for chaos experiment design (use `chaos-engineer`).
+Not for slow SQL or missing indexes (use `database-optimizer`), chaos experiment design (use
+`chaos-engineer`), or pool sizing (use `connection-pool-tuner`).
 
 ```
 Our payment breaker opens several times a day even though the provider is healthy —
@@ -491,8 +503,9 @@ p99 there is 800ms. Retune the thresholds, window, and HALF_OPEN probes.
 Designs controlled failure experiments — network latency, pod deletion, zone outages — with a
 stated hypothesis, steady-state metrics, a bounded blast radius, safety controls, and a scripted
 rollback; also plans game day exercises. It refuses to proceed without a monitoring stack, because
-steady state cannot be verified without metrics. Not for responding to an active incident (use
-`incident-response-playbook` or `sre-engineer`).
+steady state cannot be verified without metrics. Not for an active incident (use
+`incident-response-playbook`), SLO work (use `sre-engineer`), or setting breaker thresholds (use
+`circuit-breaker-tuner`).
 
 ```
 Plan a game day for our Kubernetes checkout path: pod kills first, then AZ loss. Keep the
@@ -504,7 +517,8 @@ blast radius to 5% of traffic and give me the abort criteria.
 Analyzes an existing Dockerfile and returns concrete before/after fixes for layer caching, image
 size, build speed, and security. Two passes: note every finding across the 8 checks first, then
 apply fixes — so one visible issue does not get fixed while interacting issues are missed. Not for
-Kubernetes manifests, docker-compose orchestration, or runtime security policy (AppArmor, seccomp).
+Kubernetes manifests, docker-compose orchestration, or runtime security policy (AppArmor, seccomp);
+production deployment and health checks are `sre-engineer`.
 
 ```
 Our image is 1.8GB and every code change re-runs npm install. Here's the Dockerfile —
@@ -523,7 +537,8 @@ Builds and extends Java backends on Spring Boot 3.x: REST APIs, Spring Security 
 authentication, Spring Data JPA, WebFlux reactive endpoints, caching, transaction management, and
 validation. It designs data access and security before coding and confirms the plan first, then
 implements with constructor injection and layered structure. Not for service decomposition
-decisions (use `microservices-architect`); pair with `kotlin-specialist` for Kotlin idioms.
+decisions (use `microservices-architect`) or `@Transactional` boundary audits (use
+`transaction-boundary-reviewer`); pair with `kotlin-specialist` for Kotlin idioms.
 
 ```
 Build the REST API for our member service — JWT auth with Spring Security 6, JPA
@@ -548,7 +563,7 @@ proper scope handling and cancellation, not GlobalScope everywhere.
 Builds and fixes UI: React components, layouts, client-side interactivity, data-fetching hooks,
 styling, and forms. Defaults to Next.js App Router, TypeScript, and Tailwind unless the project
 says otherwise; defines prop/state/API types before implementing, and builds top-down from the
-layout shell. Not for Vue, Svelte, or Angular, and not for backend APIs.
+layout shell. Not for Vue, Svelte, or Angular, and not for backend APIs (use `spring-boot-engineer`).
 
 ```
 Build a dashboard page in our Next.js app — server-side data fetch, filter controls,
@@ -575,15 +590,15 @@ Go `cobra + viper`, with `bubbletea` for TUIs only.
 
 ### `clean-code`
 
-Reviews and refactors code for the people who have to read it later. It scores the code 0–10,
-states the score explicitly, then lists specific violations by category — names, functions,
-comments, error handling, tests — with the refactor for each. Use it for PR feedback, legacy
+Reviews and refactors code for the people who have to read it later. It counts smells
+by category — names, functions, comments, error handling, tests — with `file:line` quotes and the
+refactor for each, and never rates the code with a score. Use it for PR feedback, legacy
 cleanup, or naming decisions. Not for architectural layer decisions (use `clean-architecture`),
 domain modeling (use `domain-driven-design`), or performance work (profile first).
 
 ```
-Review this 300-line service class for readability. Give me the score, the specific
-smells, and the refactor in priority order — I only have an afternoon.
+Review this 300-line service class for readability. Give me the smell count, the
+specific smells, and the refactor in priority order — I only have an afternoon.
 ```
 
 ### `code-documenter`
@@ -605,7 +620,9 @@ spec from the controllers, and write a README that gets a new engineer running.
 Plans a documentation system rather than writing one more page: audits what already exists,
 produces a coverage map, and writes the highest-leverage missing content. Every recommended doc
 gets a named audience and a maintenance owner, and nothing is recommended without a plan for
-keeping it current — bad docs mislead with false confidence, which is worse than none.
+keeping it current — bad docs mislead with false confidence, which is worse than none. Not for
+inline docstrings or API specs (use `code-documenter`), ADR or design-doc prose (use
+`write:plans`), or architecture diagrams (use `architecture-designer`).
 
 ```
 Our docs are spread over three wikis and half are stale. Audit what we have, map the
@@ -626,10 +643,10 @@ Doc types it distinguishes, each with its own audience and update trigger:
 
 Most skills declare `compatibility` in their frontmatter. `think-tool` is recommended wherever a
 trade-off has to be weighed explicitly — architecture patterns, SLO targets, isolation levels,
-circuit breaker thresholds, chaos blast radius. `sequential-thinking` is recommended where step
-order is the point: baseline → change → verify in the database and performance skills, detect →
-triage → mitigate → RCA in incident response, and every `*-workflow`. `mcp-reasoner` appears as
-optional on the highest-stakes design skills.
+circuit breaker thresholds, chaos blast radius. `sequential-thinking` is optional, used to force step
+order: `database-optimizer`, `connection-pool-tuner`, `flaky-test-analyzer`, `test-master`,
+`scenario-director`, and `database-workflow`. `architecture-workflow` and `testing-workflow`
+recommend `think-tool`. `dev-quality-workflow` and `operations-workflow` declare no MCP tools.
 
 If the tools are not connected, add the remote SSE endpoints under Claude 설정 → MCP Servers. The
 skills work without them; the judgment steps are just less structured.
