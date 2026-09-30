@@ -50,10 +50,10 @@ Goal: confirmed SLOs with SLIs, alert rules and runbooks for every alert, each t
 2. **Define SLOs** -- Pick SLIs, then targets from the data. Use think-tool to weigh business impact against cost of each nine.
 3. **Verify alignment** -- Stop. Present targets and ask the user to confirm. Do not go past this step without an explicit yes.
 4. **Implement monitoring** -- Four golden signals and multi-window burn-rate alerts, each with a runbook.
-5. **Automate toil** -- Measure toil first; automate the recurring tasks above 50%.
+5. **Automate toil** -- Measure toil as a share of team time and track it against that baseline; above 50% → an automation plan for the largest recurring tasks.
 6. **Resilience check** -- Hand experiments to develop:chaos-engineer; do not design them here.
 
-Load `references/` by topic: slo-sli-management, error-budget-policy, monitoring-alerting, automation-toil, capacity-planning, incident-chaos.
+Load `references/` by topic: slo-sli-management, error-budget-policy, monitoring-alerting, automation-toil, capacity-planning, incident-chaos. Worked error-budget math and a burn-rate alert: `references/examples.md`.
 
 ## Output Template
 

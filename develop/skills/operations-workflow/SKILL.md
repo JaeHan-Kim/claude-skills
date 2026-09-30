@@ -35,7 +35,7 @@ Goal: each of the 6 steps ends as passed (with evidence), skipped (with the stat
 
 ## Process
 
-Phase 1 BUILD, Phase 2 OBSERVE, Phase 3 HARDEN, Phase 4 RESPOND. Ask one line where the user is if unclear ("SLO 이미 있어" goes to Step 3, "서킷 브레이커 됐어" to Step 5); apply each Skip rule automatically.
+Phases: BUILD = Step 1, OBSERVE = Steps 2-3, HARDEN = Steps 4-5, RESPOND = Step 6; the Use/Skip table and diagram are in `references/phases.md`. Ask one line where the user is if unclear ("SLO 이미 있어" goes to Step 3, "서킷 브레이커 됐어" to Step 5); apply each Skip rule automatically.
 
 1. **Container image** -- `develop:dockerfile-optimizer`. Input: Dockerfile, runtime. Output: annotated diff, size delta, security findings. Skip: not containerized.
 2. **SLO and observability** -- `develop:sre-engineer`. Input: architecture, traffic, reliability needs. Output: SLOs, alert rules, error budget policy, runbook stubs. Skip: SLOs approved and alerting active.

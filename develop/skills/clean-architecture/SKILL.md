@@ -24,11 +24,11 @@ compatibility:
 
 ## Standing Mandates
 
-- **Forbidden reflex:** NEVER draw the four concentric circles before listing the real import arrows. A diagram drawn first shows the architecture the team wishes it had and hides the one it has.
+- **Forbidden reflex:** NEVER draw the four concentric circles unless the user asks, and never before listing the real import arrows. A diagram drawn first shows the architecture the team wishes it had and hides the one it has.
 - ALWAYS cite each dependency violation as `importer → imported` with `file:line`. An unquoted "the domain depends on the framework" cannot be rechecked or fixed.
-- ALWAYS decide "business rules testable without a database or server?" by running or reading an actual test, not by impression. Self-assessed layering is almost always generous.
+- ALWAYS decide "business rules testable without a database or server?" by running the use case tests without the framework module and quoting the exit status, not by reading or impression. Self-assessed layering is almost always generous.
 - NEVER invent the project's entities or use cases. Mark them `[확인 필요: 엔티티 목록]` — an invented domain produces boundaries around nothing.
-- Goal: each violation found has an inversion plan, and the count of outward imports in the inner circles is stated before and after. Stop at the plan unless the user asks for code; report what stays open.
+- Goal: each violation found has an inversion plan, and the count of outward imports in the inner circles is counted by grep now and the "after" is labelled projected (recount by the same grep only once code changes). Stop at the plan unless the user asks for code; report what stays open.
 
 # Clean Architecture
 
@@ -40,9 +40,9 @@ Keeps business rules ignorant of frameworks, databases, and delivery. It finds w
 
 1. **Read the tree.** List modules or packages and grep their imports; ask nothing the repo answers. Structure not available → ask in one line for the module list.
 2. **Find violations.** Use `think-tool`, if available, to trace each import chain from entities outward. Every import from an inner circle to an outer one (ORM, HTTP, SDK types) is one row, quoted.
-3. **Test the claim.** Check whether a use case test can run with no framework on the classpath. Cannot tell → `[확인 필요: 테스트 실행 여부]`.
-4. **Plan the inversion.** For each row, name the interface to define in the inner circle and the class to move outward. Load `references/framework.md` for circles, SOLID, and boundary patterns, then the matching file in `references/`.
-5. **Recount** outward imports after the plan. Nonzero → list each remainder with its reason.
+3. **Test the claim.** Run a use case test with no framework module on the classpath and quote the exit status. Cannot run it → `[확인 필요: 테스트 실행 여부]`.
+4. **Plan the inversion.** For each row, name the interface to define in the inner circle and the class to move outward. Load `references/framework.md` for circles, SOLID, and boundary patterns, then the matching file in `references/` (dependency-rule, entities-use-cases, adapters-frameworks, component-principles, solid-principles, boundaries).
+5. **Project** the outward imports left if the plan were applied (label it projected; grep again after code changes). Nonzero → list each remainder with its reason.
 
 ## Output Template
 
@@ -50,9 +50,8 @@ Keeps business rules ignorant of frameworks, databases, and delivery. It finds w
 Violations: <n> outward imports (entities <a> · use cases <b> · adapters <c>)
 | # | importer → imported | file:line | inversion |
 Plan: <interfaces to extract · classes to move>
-Diagram: <Mermaid or ASCII, drawn from the table above>
-Remaining after plan: <n> — <reason each, or "none">
-Verdict: <n> violations found, <m> planned inversions, tests without framework <yes | no | not checked>
+Remaining after plan (projected): <n> — <reason each, or "none">
+Verdict: <n> violations found, <m> planned inversions, tests without framework <command → exit status | [확인 필요]>
 ```
 
 ## What Claude Does / What You Do
@@ -60,8 +59,8 @@ Verdict: <n> violations found, <m> planned inversions, tests without framework <
 | Claude | You |
 |--------|-----|
 | Greps imports and quotes each violation | Share the module structure if the repo is not visible |
-| Defines the interface contracts and DTOs at each boundary | Confirm the business rules and entities |
-| Recounts violations after the plan | Implement outer-circle classes and wire the composition root |
+| Defines the interface contracts at each boundary | Confirm the business rules and entities |
+| Projects the remaining violations after the plan | Implement outer-circle classes and wire the composition root |
 
 ## Related Skills
 
