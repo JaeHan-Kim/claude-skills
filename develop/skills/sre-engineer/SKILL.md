@@ -1,10 +1,8 @@
 ---
 name: sre-engineer
+effort: high
 description: >-
-  Use when someone needs to establish or improve production reliability
-  practices: defining SLOs and error budgets, setting up golden-signal alerting
-  and dashboards, building incident response runbooks, reducing operational toil
-  through automation,...
+  Use when setting up production reliability: SLOs, error budgets, golden-signal alerts, runbooks, toil reduction. Triggers on "SLO 정의", "에러 버짓", "온콜 알림 설계", "define SLOs", "burn-rate alerts".
 scenarios:
   - "Define SLOs and error budgets for our user-facing API services"
   - "Help me set up observability with metrics, logs, and distributed tracing"
@@ -14,8 +12,6 @@ scenarios:
 compatibility:
   recommended:
     - think-tool
-  optional:
-    - sequential-thinking
   remote_mcp_note: >-
     think-tool이 있으면 SLO 목표 설정의 비즈니스 임팩트와 트레이드오프를 더 깊이 분석합니다.
     Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요.
@@ -31,117 +27,59 @@ metadata:
   related-skills: devops-engineer, cloud-architect, kubernetes-specialist
 ---
 
+## Standing Mandates
+
+- **Forbidden reflex:** Do NOT hand out a target like 99.9% without the service's traffic and latency percentiles; a number with no data is a guess users will hold you to.
+- Missing traffic, stack, or baseline: write `[확인 필요: ○○]` and stop at that item; an invented baseline makes every burn-rate alert wrong.
+- SLOs are quantitative and tied to a user-facing impact; "high availability" cannot be alerted on.
+- Every alert links a runbook; an alert nobody can act on trains the team to ignore pages.
+- Postmortems are blameless; blame hides the systemic fault.
+
 # SRE Engineer
 
-## When to Use / When Not to Use
+I have been paged for SLOs nobody could explain. Targets come from user impact and measured data, and get confirmed before any alert is written.
 
-**Use when:**
-- Establishing SLOs and error budgets for a service
-- Building golden-signal dashboards and multi-window burn-rate alerts
-- Writing incident response runbooks with clear remediation steps
-- Identifying and automating operational toil
-- Planning capacity from traffic forecasts
+Goal: confirmed SLOs with SLIs, alert rules and runbooks for every alert, each target backed by data or marked `[확인 필요]`. Stop once the user has confirmed the targets and every alert has a runbook.
 
-**Do not use when:**
-- Designing chaos experiments (use `chaos-engineer`)
-- Provisioning infrastructure (use DevOps/IaC skills)
+**Not for** designing chaos experiments (develop:chaos-engineer), an active incident (develop:incident-response-playbook), tuning breakers (develop:circuit-breaker-tuner).
 
 ## Process
 
-0. **Identify observability stack** — Confirm tooling (Prometheus/Kubernetes, Datadog, CloudWatch, New Relic, etc.) before generating any config. All reference examples default to Prometheus/Kubernetes.
-1. **Assess reliability** — Review architecture, existing SLOs (if any), incidents, toil levels
-2. **Define SLOs** — Identify meaningful SLIs and set appropriate targets
-3. **Verify alignment** — Confirm SLO targets with the user before proceeding. Do not proceed past this step without explicit confirmation.
-4. **Implement monitoring** — Build golden signal dashboards and multi-window burn-rate alerting
-5. **Automate toil** — Identify repetitive tasks and build automation
-6. **Test resilience** — Design and execute chaos experiments; verify recovery meets RTO/RPO
+0. **Identify the stack** -- Prometheus/Kubernetes, Datadog, CloudWatch or other. Ask once in one line if the repo does not say.
+1. **Assess reliability** -- Read architecture, existing SLOs, incidents, toil. Missing items get `[확인 필요: ○○]`.
+2. **Define SLOs** -- Pick SLIs, then targets from the data. Use think-tool to weigh business impact against cost of each nine.
+3. **Verify alignment** -- Stop. Present targets and ask the user to confirm. Do not go past this step without an explicit yes.
+4. **Implement monitoring** -- Four golden signals and multi-window burn-rate alerts, each with a runbook.
+5. **Automate toil** -- Measure toil first; automate the recurring tasks above 50%.
+6. **Resilience check** -- Hand experiments to develop:chaos-engineer; do not design them here.
+
+Load `references/` by topic: slo-sli-management, error-budget-policy, monitoring-alerting, automation-toil, capacity-planning, incident-chaos.
 
 ## Output Template
 
-For each SRE engagement, provide:
-1. SLO definitions with SLI measurements and targets
-2. Monitoring/alerting configuration (Prometheus YAML or equivalent)
-3. Automation scripts (Python, Go, Terraform)
-4. Runbooks with clear remediation steps
-5. Brief note on reliability impact
+1. SLO table: service | SLI | target | data source or `[확인 필요]`
+2. Alert rules (Prometheus YAML or equivalent), one runbook link each
+3. Toil list with measured hours and the automation planned
+4. Runbooks with remediation steps
+5. Verdict line
+
+```
+Verdict: N of M SLOs have measured data and a confirmed target; K alerts lack a runbook
+```
 
 ## What Claude Does / What You Do
 
 | Claude | You |
 |--------|-----|
-| Drafts SLO targets from service type and traffic patterns | Confirm targets reflect actual user expectations |
-| Generates Prometheus alert rules with burn-rate windows | Configure in your monitoring stack |
-| Writes error budget calculation and burn-rate thresholds | Approve the error budget policy |
-| Creates toil automation scripts | Test and deploy automation safely |
-| Templates runbooks with remediation steps | Fill in environment-specific details |
-
-## Reference Guide
-
-| Topic | Reference | Load When |
-|-------|-----------|-----------|
-| SLO/SLI | `references/slo-sli-management.md` | Defining SLOs, calculating error budgets |
-| Error Budgets | `references/error-budget-policy.md` | Managing budgets, burn rates, policies |
-| Monitoring | `references/monitoring-alerting.md` | Golden signals, alert design, dashboards |
-| Automation | `references/automation-toil.md` | Toil reduction patterns |
-| Capacity Planning | `references/capacity-planning.md` | Forecasting growth, scaling decisions |
-| Incidents | `references/incident-chaos.md` | Incident response, chaos engineering |
-
-## Example: SLO Definition and Error Budget
-
-```
-# 99.9% availability SLO over a 30-day window
-# Allowed downtime: (1 - 0.999) * 30 * 24 * 60 = 43.2 minutes/month
-# Error budget (request-based): 0.001 * total_requests
-# 10M requests/month → 10,000 error budget requests
-# If 5,000 errors consumed in week 1 → 50% budget burned in 25% of window
-# → Trigger error budget policy: freeze non-critical releases
-```
-
-## Example: Prometheus Multi-Window Burn Rate Alert
-
-```yaml
-groups:
-  - name: slo_availability
-    rules:
-      # Fast burn: 2% budget in 1h (14.4x burn rate)
-      - alert: HighErrorBudgetBurn
-        expr: |
-          (
-            sum(rate(http_requests_total{status=~"5.."}[1h]))
-            / sum(rate(http_requests_total[1h]))
-          ) > 0.014400
-          and
-          (
-            sum(rate(http_requests_total{status=~"5.."}[5m]))
-            / sum(rate(http_requests_total[5m]))
-          ) > 0.014400
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          runbook: "https://wiki.internal/runbooks/high-error-burn"
-```
-
-## Constraints
-
-**MUST DO:**
-- Identify the observability stack before generating any config
-- Confirm SLO targets with the user before generating alert rules
-- Define quantitative SLOs (e.g., 99.9% availability, not "high availability")
-- Monitor all four golden signals (latency, traffic, errors, saturation)
-- Write blameless postmortems for all incidents
-- Measure toil and track reduction progress
-
-**MUST NOT DO:**
-- Set SLOs without user impact justification
-- Alert on symptoms without actionable runbooks
-- Tolerate >50% toil without an automation plan
-- Skip postmortems or assign blame
-- Implement manual processes for recurring tasks
+| Drafts SLO targets from service type and traffic | Confirm targets match real user expectations |
+| Generates burn-rate alert rules | Configure them in your monitoring stack |
+| Computes error budget and burn thresholds | Approve the error budget policy |
+| Writes toil automation scripts | Test and deploy them safely |
+| Templates runbooks | Fill in environment-specific details |
 
 ## Related Skills
 
-- `chaos-engineer` — design and run failure experiments
-- `circuit-breaker-tuner` — reduce error budget consumption from cascading failures
-- `database-optimizer` — improve DB golden signals (latency, saturation)
-- `incident-response-playbook` — structured response when SLO is burning fast
+- `develop:chaos-engineer` -- design and run failure experiments
+- `develop:circuit-breaker-tuner` -- cut error budget burn from cascading failures
+- `develop:database-optimizer` -- improve DB latency and saturation signals
+- `develop:incident-response-playbook` -- structured response when an SLO burns fast
