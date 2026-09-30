@@ -34,7 +34,7 @@ Ships the UI change in the project's own conventions, not a tutorial.
 
 ## Process
 
-1. **Read the project.** `package.json`, router type, existing components, styling approach. Identify component boundaries and server vs client rendering. Use `think-tool`, if available, for the boundary decision. Show the proposed server/client split and stop; proceed only after the user confirms or changes it.
+1. **Read the project.** `package.json`, router type, existing components, styling approach. Identify component boundaries and server vs client rendering. Use `think-tool`, if available, for the boundary decision. For new UI, show the proposed server/client split and stop; proceed only after the user confirms or changes it. Skip the confirm for a small bug fix to an existing component where no rendering-model decision exists.
 2. **Define types** for props, state, and API shapes before implementation.
 3. **Implement** top-down: layout shell, then data-dependent children. Examples: `references/component-patterns.md`.
 4. **Style** with mobile-first breakpoints in the project's styling system.

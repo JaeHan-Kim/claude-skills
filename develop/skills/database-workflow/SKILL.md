@@ -25,7 +25,7 @@ compatibility:
 - **Forbidden reflex:** NEVER run all four steps in order as a checklist, or start at step 1, before locating the slow layer from the user's own numbers when the job is a slowdown. A full pass with no entry point tunes a healthy layer — an index on a query that was never slow, while the pool sat exhausted.
 - NEVER run DDL, or any write, against a real database without the user's explicit go — an index build or parameter change in steps 1–3 is such an act. The sub-skills prepare statements; the user runs them. `EXPLAIN ANALYZE` on DML executes the write.
 - NEVER skip a step on your own reading. A skip rests on the user's quoted evidence (EXPLAIN, pool metrics) or is marked `[확인 필요: ○○]` and asked once. Only the step skill's output judges its layer.
-- Goal: every step is run or skipped with the user's evidence quoted. Stop when the four are accounted for, or a step ends in `[확인 필요]` the user has not answered.
+- Goal: every step is run or skipped with the user's evidence quoted. Stop when the four are accounted for, or a step ends in `[확인 필요]` the user has not answered. For a design/audit run (no live slowdown), all four steps run from code with unmeasured values marked `[확인 필요]`, and that is the stop.
 
 # Database Workflow
 
@@ -54,7 +54,7 @@ Before step 1, read what the user pasted and pick the entry step from it; ask in
 | 2 | develop:database-optimizer | … | … |
 | 3 | develop:connection-pool-tuner | … | … |
 | 4 | develop:transaction-boundary-reviewer | … | … |
-Slow layer: <layer — the quoted number that shows it> or [확인 필요: ○○]
+Slow layer: <layer — the quoted number that shows it> or [확인 필요: ○○] or n/a — design/audit run
 Verdict: <n> of 4 steps run, <n> skipped with quoted evidence, <n> marked [확인 필요]
 ```
 
