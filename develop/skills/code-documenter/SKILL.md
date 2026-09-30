@@ -1,10 +1,8 @@
 ---
 name: code-documenter
 description: >-
-  Use when code, an API, or a project lacks documentation and needs it created
-  or improved — adding docstrings or JSDoc to functions and classes, generating
-  OpenAPI/ Swagger specs from an existing API, building a documentation site, or
-  writing...
+  Use when code or an API lacks docs: docstrings/JSDoc, OpenAPI specs, a doc site, tutorials. Triggers: "문서화해줘", "docstring 추가", "API 문서 생성", "add JSDoc", "generate OpenAPI", "write a README".
+effort: medium
 scenarios:
   - "Our codebase has no documentation and new engineers can't understand it"
   - "Generate API documentation from this undocumented codebase"
@@ -14,9 +12,9 @@ scenarios:
 compatibility:
   recommended: []
   optional:
-    - think-tool
+    - code-review-graph
   remote_mcp_note: >-
-    think-tool이 있으면 문서 커버리지 전략과 정보 구조 설계를 더 체계적으로 검토합니다.
+    code-review-graph가 있으면 문서화 대상인 공개 함수와 엔드포인트를 코드 그래프에서 빠짐없이 찾아 커버리지를 더 정확히 셉니다.
     Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요.
 license: MIT
 metadata:
@@ -30,85 +28,35 @@ metadata:
   related-skills: spec-miner, fullstack-guardian, code-reviewer
 ---
 
+## Standing Mandates
+
+- **Forbidden reflex:** NEVER document what the code is meant to do — document what it does. A docstring written from a function's name promises a return value or exception the body never produces, and readers trust the docstring over the code.
+- NEVER invent a parameter meaning, return semantic, or rationale you cannot see in the code. Mark it `[확인 필요: 의도]` and leave the line for the owner.
+- ALWAYS take "examples compile" from the validator's output, not from reading them. An untested example is the first thing a reader copies and the first thing that breaks.
+- ALWAYS match the repo's existing docstring style; ask only if the repo shows none. Mixed styles make the docs unsearchable.
+- Touch only the documentation in scope: no code changes, no reformatting, no rewording of docs that are already accurate.
+- Goal: every public function, class and endpoint in scope is documented or listed `[확인 필요]`, and the validators exit 0. Stop after two validate-and-fix rounds and report what still fails.
+
 # Code Documenter
 
-## When to Use / When Not to Use
+Writes the docs the code already proves: docstrings, JSDoc, OpenAPI specs, doc sites, guides.
 
-**Use when:**
-- Functions and classes lack docstrings, JSDoc, or KDoc
-- An existing API needs an OpenAPI/Swagger spec
-- The project needs a documentation site (Docusaurus, MkDocs, VitePress)
-- Writing tutorials, user guides, or troubleshooting docs
-
-**Do not use when:**
-- You need architectural decision documentation (use `write:plans` (ADR format))
-- You need a documentation strategy plan (use `documentation-strategy`)
+**Not for** architecture decisions or ADRs (write:plans) or planning a documentation system (develop:documentation-strategy).
 
 ## Process
 
-1. **Discover** — Ask for format preference and exclusions. If unspecified, inspect the codebase for existing conventions first; default to Google style (Python) or JSDoc (TypeScript/JS) if none found.
-2. **Detect** — Identify language and framework
-3. **Analyze** — Find undocumented public functions, classes, and API endpoints
-4. **Document** — Apply consistent format across all targets
-5. **Validate** — Test all code examples compile/run:
+1. **Discover.** Detect language, framework and existing doc style from the repo. No convention found → Google style (Python) or JSDoc (TypeScript/JS) and say so. Scope not stated → ask in one line.
+2. **Analyze.** List undocumented public functions, classes and endpoints with `file:line`. Use `code-review-graph`, if available, to find public symbols and route handlers so none is missed. Count them: that is the baseline.
+3. **Document.** Apply one format to every target, from signatures and bodies. Examples: `references/quick-examples.md`; per-language detail in the `references/` file listed below. Intent not visible in code → `[확인 필요: 의도]`. Skip obvious getters and setters.
+4. **Build the outputs asked for.** README, guides/tutorials, doc site, API docs — only those requested:
+   - README / guides / tutorials: structured markdown with runnable examples (`references/user-guides-tutorials.md`, `references/tutorial-structure.md`).
+   - Doc site: site config + content structure + build instructions (`references/doc-site-generators.md`, `references/information-architecture.md`).
+   - API docs: OpenAPI spec from route handlers + portal configuration (`references/openapi-advanced.md`, `references/api-portals.md`).
+5. **Validate and fix.** Run the checks and paste exit status; fix each failure, re-run, at most two rounds, then list what still fails:
    - Python: `python -m doctest file.py` or `pytest --doctest-modules`
    - TypeScript/JavaScript: `tsc --noEmit`
    - OpenAPI: `npx @redocly/cli lint openapi.yaml`
-6. **Report** — Generate coverage summary. Flag any file below 70% function coverage or any API endpoint below 100% coverage.
-
-## Output Template
-
-| Task | Output |
-|------|--------|
-| Code documentation | Documented files + coverage report |
-| API docs | OpenAPI spec + portal configuration |
-| Doc site | Site config + content structure + build instructions |
-| Guides/Tutorials | Structured markdown with examples |
-
-## What Claude Does / What You Do
-
-| Claude | You |
-|--------|-----|
-| Detects existing docstring conventions | Confirm the format preference |
-| Generates docstrings/JSDoc from function signatures | Review for accuracy against real behavior |
-| Drafts OpenAPI spec from route handlers | Validate request/response examples against live API |
-| Configures doc site structure | Provide content for tutorials and guides |
-| Runs validation commands and reports coverage | Address files below the 70% coverage gate |
-
-## Quick-Reference Examples
-
-### Google-style Docstring (Python)
-```python
-def fetch_user(user_id: int, active_only: bool = True) -> dict:
-    """Fetch a single user record by ID.
-
-    Args:
-        user_id: Unique identifier for the user.
-        active_only: When True, raise an error for inactive users.
-
-    Returns:
-        A dict containing user fields (id, name, email, created_at).
-
-    Raises:
-        ValueError: If user_id is not a positive integer.
-        UserNotFoundError: If no matching user exists.
-    """
-```
-
-### JSDoc (TypeScript)
-```typescript
-/**
- * Fetches a paginated list of products from the catalog.
- *
- * @param {string} categoryId - The category to filter by.
- * @param {number} [page=1] - Page number (1-indexed).
- * @returns {Promise<ProductPage>} Resolves to a page of product records.
- * @throws {NotFoundError} If the category does not exist.
- */
-async function fetchProducts(categoryId: string, page = 1): Promise<ProductPage> { ... }
-```
-
-## Reference Guide
+6. **Report.** Recount documented symbols against the baseline. Flag any file under 70% function coverage and any endpoint under 100%.
 
 | Topic | Reference | Load When |
 |-------|-----------|-----------|
@@ -121,23 +69,30 @@ async function fetchProducts(categoryId: string, page = 1): Promise<ProductPage>
 | OpenAPI Advanced | `references/openapi-advanced.md` | Reusable components, security schemes |
 | Tutorial Structure | `references/tutorial-structure.md` | Progressive learning paths |
 
-## Constraints
+## Output Template
 
-**MUST DO:**
-- Ask for format preference before starting (or detect from existing code)
-- Document all public functions and classes
-- Include parameter types, descriptions, and exception docs
-- Test all code examples in documentation
-- Generate a coverage report
+```
+Baseline: <n> public symbols / endpoints in scope, <m> undocumented
+Documented: <files> — style: <Google | JSDoc | other, detected | defaulted>
+Outputs: <README | guides/tutorials | doc site config + structure + build steps | OpenAPI spec + portal config> — as requested
+Validation: <command> → <exit status>
+Coverage: <functions %> · <endpoints %>
+Open: <k> × [확인 필요: 의도] — <file:line list>
+Verdict: <documented> of <n> symbols documented, <k> open, validators <green | red>
+```
 
-**MUST NOT DO:**
-- Assume docstring format without asking or detecting
-- Write inaccurate or untested documentation examples
-- Skip exception/error documentation
-- Document obvious getters/setters verbosely
+## What Claude Does / What You Do
+
+| Claude | You |
+|--------|-----|
+| Detects existing conventions and lists undocumented symbols | Confirm scope and format preference |
+| Writes docs from signatures and bodies, marks unknown intent | Review for accuracy against real behaviour and fill the markers |
+| Drafts OpenAPI from route handlers | Validate request and response examples against the live API |
+| Writes the README, guides, doc-site structure and OpenAPI spec + portal config that were asked for | Pick the site generator and hosting; supply product context for tutorials |
+| Runs validators, fixes, re-runs (two rounds) and recounts coverage | Decide whether files under the 70% gate get another pass |
 
 ## Related Skills
 
-- `write:plans` (ADR format) — for documenting architectural decisions
-- `documentation-strategy` — for planning a documentation system
-- `code-documenter` + `frontend-developer` — generate JSDoc alongside React component builds
+- `develop:documentation-strategy` — plan a documentation system first
+- `write:plans` — ADR and design-doc format
+- `develop:frontend-developer` — JSDoc alongside React component builds
