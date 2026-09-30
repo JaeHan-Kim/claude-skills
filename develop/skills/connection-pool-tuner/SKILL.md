@@ -1,124 +1,74 @@
 ---
 name: connection-pool-tuner
 description: >-
-  Use when an application shows intermittent database connection failures, API
-  latency that spikes under traffic, or pool exhaustion errors — and you need to
-  diagnose and tune connection pool settings (HikariCP, pgBouncer, or similar).
+  Use when connections time out, pool exhaustion errors appear, or latency spikes under traffic and the pool (HikariCP, pgBouncer) needs diagnosis and tuning. Triggers: "커넥션 풀 고갈", "HikariCP 설정", "pool exhausted", "connection timeout".
+effort: high
 scenarios:
   - "Our application is getting 'connection pool exhausted' errors under load"
-  - "Help me tune HikariCP settings for a Spring Boot service with 500 concurrent users"
-  - "Database connections are timing out — need to optimize pool configuration"
+  - "Help me tune HikariCP settings for a Spring Boot service"
+  - "Database connections are timing out — check our pool configuration"
   - "커넥션 풀이 고갈되면서 DB 연결 오류가 나"
   - "HikariCP 설정을 최적화해줘"
 compatibility:
-  recommended:
-    - think-tool
   optional:
     - sequential-thinking
   remote_mcp_note: >-
-    think-tool이 있으면 증상 → 원인 → 설정 변경의 진단 체인을 더 체계적으로 따를 수 있습니다.
+    sequential-thinking은 풀 크기를 제안하기 전에 증상 → 원인 진단을 먼저 끝내도록 순서를 강제합니다.
     Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요.
 ---
 
+## Standing Mandates
+
+- **Forbidden reflex:** NEVER raise `maximumPoolSize` before the user's active / pending / timeout numbers show the pool, not a slow query, is the bottleneck. A bigger pool in front of a saturated database just queues more work there and turns pool timeouts into database outages.
+- NEVER run DDL, or any write, against a real database without the user's explicit go — Claude prepares config snippets and any statement; the user applies them.
+- NEVER assume DB server specs or latency figures. Core count, disk type, P99 query time missing → `[확인 필요: DB 코어 수/디스크 유형]` / `[확인 필요: P99]` and stop. The sizing formula is a PostgreSQL-oriented starting point, not a law; say so when citing it.
+- ALWAYS read numbers from the user's metrics (`hikaricp.connections.*`, `pg_stat_activity`, logs), never from the symptom's name.
+- Goal: a user-supplied criterion (for example pending == 0 sustained and no timeouts at the user's peak) is met, or the run stops with what is missing. At most three tuning rounds.
+
 # Connection Pool Tuner
 
-## When to Use / When Not to Use
+Tunes a pool from the user's own pool metrics, after ruling out the query as the cause.
 
-**Use when:**
-- Seeing `Connection timeout` or `pool exhaustion` errors under load
-- API latency spikes correlate with database traffic
-- Many idle connections are visible at the database server
-- Setting up a new application and need to size the pool correctly
-
-**Do not use when:**
-- The root cause is slow SQL queries (use `sql-pro`)
-- The issue is server-level memory/IO config (use `database-optimizer`)
+**Not for** slow SQL as the root cause (develop:sql-pro) or server memory/IO config (develop:database-optimizer).
 
 ## Process
 
-1. **Identify the symptom** — Match to the diagnosis table below
-2. **Apply the sizing formula** — Calculate target pool size from DB server specs
-3. **Configure primary settings** — `maximumPoolSize`, `minimumIdle`, `connectionTimeout`, `maxLifetime`
-4. **Enable leak detection** — Set `leakDetectionThreshold` to 2× P99 query time
-5. **Add monitoring** — Expose `hikaricp.connections.*` metrics; alert on `pending > 0` sustained
-6. **Validate** — Watch pool utilization under load; target 60–80% at peak
+1. **Intake.** Get current pool settings, the error text, and active / idle / pending / timeout numbers. Missing → mark and ask once in one line. Use `sequential-thinking`, if available, to finish diagnosis before any size is proposed.
+2. **Diagnose.** Match the symptom below and quote the number that supports it. A slow query holding connections → hand to `develop:sql-pro`.
+3. **Size** only with the user's real specs, using the starting-point formula in `references/pool-config.md`; otherwise mark `[확인 필요: DB 코어 수/디스크 유형]`.
+4. **Configure** `maximumPoolSize`, `minimumIdle`, `connectionTimeout`, `maxLifetime` (shorter than the firewall/DB timeout), `leakDetectionThreshold` (2x the user's P99). Snippets and pgBouncer modes: `references/pool-config.md`.
+5. **Monitor.** Name the metrics and the alert (`pending > 0` sustained). The user applies the change and reports the numbers under load; not met after three rounds → stop and report.
 
-If `sequential-thinking` is available, use it to enforce diagnosis before recommending pool size — the most common failure is jumping to `maximumPoolSize` before applying the formula.
+| Symptom | Likely Cause | Investigation |
+|---------|-------------|---------------|
+| `Connection timeout` under load | Pool too small, or slow queries holding connections | Active vs max; slow queries holding connections |
+| Many idle connections at DB | Pool max too large | `idleTimeout`, `minimumIdle` |
+| Slow response at traffic spikes | New connections created under load | `minimumIdle` gap; pre-warm the pool |
+| `Connection leak detected` warnings | Code not returning connections | Leak detection; audit acquisition paths |
+| DB CPU spikes with few active connections | N+1 queries holding connections | Profile queries; transactions spanning HTTP requests |
+| Errors after DB failover | Stale connections in pool | Connection validation; `keepaliveTime` |
 
 ## Output Template
 
-For each pool tuning task, provide:
-1. Recommended property values with rationale
-2. The sizing formula applied to actual server specs
-3. `application.properties` or `pgbouncer.ini` snippet
-4. Monitoring query / metrics to track
-5. Common mistake check against the current config
+```
+Symptom: <matched row> — evidence: <quoted metric or log line, or [확인 필요: …]>
+Bottleneck: pool | query | database — <why>
+Settings: <property: current → proposed, rationale> (user applies; not executed)
+Monitor: <metric and alert>
+Mistake check: <common mistakes from references/pool-config.md found in current config>
+Verdict: <n> settings changed, <n> backed by your metrics, <n> marked [확인 필요]
+```
 
 ## What Claude Does / What You Do
 
 | Claude | You |
 |--------|-----|
-| Applies sizing formula to your DB server specs | Provide DB server core count and disk type |
-| Recommends `maximumPoolSize`, `minimumIdle`, timeouts | Apply settings and observe under real load |
-| Identifies config mistakes from your current settings | Confirm recovery time from your runbooks |
-| Generates HikariCP properties or pgBouncer ini snippet | Test with production-scale traffic patterns |
-| Recommends Micrometer metrics to alert on | Wire alerts to your monitoring stack |
-
-## The Fundamental Sizing Formula
-
-```
-pool_size = (core_count * 2) + effective_spindle_count
-```
-
-- `core_count`: CPU cores available to the DB server
-- `effective_spindle_count`: 1 for SSD, 0 if data fits in RAM
-
-Example: 4-core SSD server → `(4 * 2) + 1 = 9` → round to 10.
-
-A server handling 1000 concurrent requests does NOT need 1000 DB connections. It needs ~10, with the rest queued.
-
-## Symptom Diagnosis
-
-| Symptom | Likely Cause | Investigation |
-|---------|-------------|---------------|
-| `Connection timeout` under load | Pool too small | Check pool active vs. max; look for slow queries holding connections |
-| Many idle connections at DB | Pool max too large | Check `idleTimeout` and `minimumIdle` settings |
-| Slow response at traffic spikes | New connections created under load | Reduce `minimumIdle` gap or pre-warm the pool |
-| `Connection leak detected` warnings | Code not returning connections | Enable leak detection; audit acquisition paths |
-| DB CPU spikes with few active connections | N+1 queries holding connections | Profile queries; check for transactions spanning HTTP requests |
-| Errors after DB failover | Stale connections in pool | Enable connection validation; set `keepaliveTime` |
-
-## HikariCP Key Properties
-
-```properties
-# application.properties (Spring Boot)
-spring.datasource.hikari.maximum-pool-size=10
-spring.datasource.hikari.minimum-idle=5
-spring.datasource.hikari.connection-timeout=30000       # ms: max wait for a pool connection
-spring.datasource.hikari.idle-timeout=600000            # ms: idle connections live 10 min
-spring.datasource.hikari.max-lifetime=1800000           # ms: max connection lifetime 30 min
-spring.datasource.hikari.keepalive-time=60000           # ms: ping to survive firewall NAT
-spring.datasource.hikari.leak-detection-threshold=60000 # ms: warn if connection held > 60s
-```
-
-## pgBouncer Modes
-
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| `transaction` | Connection returned after each transaction | Most web applications |
-| `session` | Connection held for entire client session | Temp tables, advisory locks, prepared statements |
-| `statement` | Returned after each statement | Avoid — breaks multi-statement transactions |
-
-## Common Mistakes
-
-- **Pool size equals thread count** — threads spend most time not waiting on the database
-- **`minimumIdle` much lower than `maximumPoolSize`** — creates connections under load when latency is critical
-- **`maxLifetime` not set shorter than firewall timeout** — silent TCP drops cause cryptic errors on first query
-- **Leak detection disabled in production** — one missing `close()` eventually exhausts the pool
-- **One pool for all workloads** — separate OLTP (short queries) from reporting (long queries)
+| Names the bottleneck from your metrics and proposes settings | Provide DB core count, disk type, current pool settings, and metrics |
+| Generates the HikariCP or pgBouncer snippet and the alert metrics | Apply the settings and observe under real load |
+| Checks your config against the common-mistakes list | Decide recovery targets and wire alerts to your monitoring |
 
 ## Related Skills
 
-- `database-optimizer` — server-level tuning after pool config is correct
-- `sql-pro` — slow query rewriting when pool is correctly sized but queries are still slow
-- `circuit-breaker-tuner` — add circuit breakers alongside pool to prevent cascading failure
+- `develop:database-optimizer` — server-level tuning after the pool is correct
+- `develop:sql-pro` — slow query rewriting when the pool is sized right
+- `develop:circuit-breaker-tuner` — circuit breakers alongside the pool against cascading failure

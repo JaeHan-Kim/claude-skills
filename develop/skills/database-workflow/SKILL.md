@@ -1,128 +1,74 @@
 ---
 name: database-workflow
 description: >-
-  Use when investigating database performance degradation end-to-end — from
-  query quality through server tuning, connection layer, and transaction safety.
-  Triggers on: "database workflow", "DB 성능 전체", "database performance
-  investigation", "DB 전체 점검".
+  Use when DB performance is degraded and the slow layer is unknown — query, server, pool, or transaction. Triggers: "database workflow", "DB 성능 전체", "DB 전체 점검", "database performance investigation".
 type: workflow
 theme: engineering
+effort: high
 scenarios:
-  - "database workflow 전체 돌려줘"
+  - "Run the database workflow on our slow production DB"
+  - "Database performance investigation — find which layer is slow"
+  - "Check queries, pool, and transactions for our new DB-heavy feature"
   - "DB 성능 문제 처음부터 끝까지 점검해줘"
-  - "database performance investigation 시작"
-  - "프로덕션 DB가 너무 느려 — 전체 레이어 다 봐줘"
-  - "새 기능 DB 설계, 쿼리부터 트랜잭션까지 제대로 하고 싶어"
-  - "connection pool이랑 transaction까지 포함해서 DB 전체 전략 잡아줘"
-estimated_time: "2-6 hours (full), 30-90 min per step"
+  - "프로덕션 DB가 너무 느려 — 어느 레이어 문제인지 봐줘"
+estimated_time: "not estimated — depends on the evidence the user supplies"
 compatibility:
-  recommended:
-    - think-tool
   optional:
     - sequential-thinking
   remote_mcp_note: >-
-    think-tool은 실행 계획 해석과 트랜잭션 격리 수준 트레이드오프 분석에서 특히 유효합니다.
-    sequential-thinking은 베이스라인 캡처 → 변경 → 검증 순서를 강제합니다.
+    sequential-thinking은 사용자가 준 수치로 느린 레이어를 먼저 특정한 뒤 단계를 진행하도록 순서를 강제합니다.
     Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요.
 ---
 
+## Standing Mandates
+
+- **Forbidden reflex:** NEVER run all four steps in order as a checklist, or start at step 1, before locating the slow layer from the user's own numbers when the job is a slowdown. A full pass with no entry point tunes a healthy layer — an index on a query that was never slow, while the pool sat exhausted.
+- NEVER run DDL, or any write, against a real database without the user's explicit go — an index build or parameter change in steps 1–3 is such an act. The sub-skills prepare statements; the user runs them. `EXPLAIN ANALYZE` on DML executes the write.
+- NEVER skip a step on your own reading. A skip rests on the user's quoted evidence (EXPLAIN, pool metrics) or is marked `[확인 필요: ○○]` and asked once. Only the step skill's output judges its layer.
+- Goal: every step is run or skipped with the user's evidence quoted. Stop when the four are accounted for, or a step ends in `[확인 필요]` the user has not answered.
+
 # Database Workflow
 
-4-step database quality process: query authoring → slow query diagnosis → connection layer → transaction safety.
+Routes a database slowdown to the layer the user's numbers point at: query → server → pool → transaction.
 
-## When to Use / When Not to Use
+Also runs as a design / audit pass — a new DB-heavy feature, or onboarding to an existing DB layer — with no slowdown to locate (see Design / audit entry).
 
-| Use | Skip |
-|-----|------|
-| Production database slowness with unknown root layer | Single query rewrite request — use sql-pro |
-| Designing a new database-heavy feature | Pool sizing only — use connection-pool-tuner |
-| Database-layer onboarding or audit | Transaction review only — use transaction-boundary-reviewer |
+**Not for** a single query rewrite (develop:sql-pro), pool sizing alone (develop:connection-pool-tuner), or a transaction review alone (develop:transaction-boundary-reviewer).
 
----
+## Process
 
-## Workflow Overview
+1. **Query quality — `develop:sql-pro`.** Enter with the slow query, schema, engine + version, and the user's `EXPLAIN (ANALYZE, BUFFERS)`. Skip only if that EXPLAIN is quoted and shows no sequential scan on a large table.
+2. **Server level — `develop:database-optimizer`.** Enter with the step-1 plan and the deployment type (self-managed vs RDS/Cloud SQL). Skip only if the user's metrics are quoted and show a healthy baseline.
+3. **Connection layer — `develop:connection-pool-tuner`.** Enter with DB core count, disk type, pool settings, and the symptom. Skip only if pool metrics are quoted with no timeouts and no sustained pending at peak.
+4. **Transaction safety — `develop:transaction-boundary-reviewer`.** Enter with the service and repository code and the inconsistency symptom. Skip only if the service is read-only or the quoted code shows single-table writes with no external I/O inside transactions.
+
+**Design / audit entry.** With no slowdown and no EXPLAIN or pool numbers yet, run all four steps from code: schema and queries-to-be (step 1), deployment and config (step 2), pool config (step 3), transaction boundaries (step 4). Numbers not yet measured (row counts, EXPLAIN, pool metrics, peak load) are marked `[확인 필요: ○○]`, never estimated. Output is findings; the user runs any DDL or config change.
+
+Before step 1, read what the user pasted and pick the entry step from it; ask in one line only when no layer is indicated and the job is a slowdown, not design / audit. Direct entry stays: "커넥션 풀부터" → step 3; "트랜잭션 경계만" → step 4. Use `sequential-thinking`, if available, to hold that order. Each step's own skill defines its input and output; do not restate them here.
+
+## Output Template
 
 ```
-[1] SQL Quality (sql-pro)
-     Write / rewrite queries, index strategy, EXPLAIN plan
-        ↓
-[2] Server-Level Optimization (database-optimizer)
-     Slow query diagnosis, execution plan, server config tuning
-        ↓
-[3] Connection Layer Tuning (connection-pool-tuner)
-     Pool sizing, HikariCP / pgBouncer config, leak detection
-        ↓
-[4] Transaction Safety (transaction-boundary-reviewer)
-     Isolation levels, @Transactional scope, Outbox / Saga patterns
+| Step | Skill | Run / Skipped | Evidence (quote) |
+| 1 | develop:sql-pro | … | … |
+| 2 | develop:database-optimizer | … | … |
+| 3 | develop:connection-pool-tuner | … | … |
+| 4 | develop:transaction-boundary-reviewer | … | … |
+Slow layer: <layer — the quoted number that shows it> or [확인 필요: ○○]
+Verdict: <n> of 4 steps run, <n> skipped with quoted evidence, <n> marked [확인 필요]
 ```
-
----
-
-## Steps
-
-### Step 1 — SQL Quality
-**Skill:** `sql-pro`
-**Goal:** Write or rewrite queries using CTEs, window functions, and correct join types; design indexes that cover the query access patterns; interpret EXPLAIN plans
-**Input:** Slow query or new query requirements; schema DDL; target DB engine and version
-**Output:** Optimized query with inline comments, covering index recommendations, EXPLAIN plan analysis, before/after performance metrics
-**Skip if:** All queries are already optimized and EXPLAIN plans show no sequential scans on large tables
-
-> "Step 1 시작" 또는 "이 쿼리 최적화해줘"
-
----
-
-### Step 2 — Server-Level Optimization
-**Skill:** `database-optimizer`
-**Goal:** Diagnose performance issues that survive query-level fixes — server memory config, VACUUM, lock contention, statistics staleness, partitioning design
-**Input:** EXPLAIN (ANALYZE, BUFFERS) output from Step 1; DB engine, version, and deployment type (self-managed vs. RDS/Cloud SQL)
-**Output:** Bottleneck analysis with EXPLAIN evidence, server parameter recommendations, incremental implementation plan, validation queries
-**Skip if:** DB server is correctly configured and EXPLAIN plans are already optimal (Step 1 output is clean)
-
-> "Step 2 시작" 또는 "서버 레벨 튜닝 해줘"
-
----
-
-### Step 3 — Connection Layer Tuning
-**Skill:** `connection-pool-tuner`
-**Goal:** Size the connection pool correctly for the DB server, diagnose pool exhaustion vs. slow-query root cause, configure leak detection and monitoring
-**Input:** DB server core count and disk type; current HikariCP or pgBouncer settings; symptom description (timeout errors, idle connection count)
-**Output:** Sizing formula applied to actual specs, `application.properties` or `pgbouncer.ini` snippet, Micrometer metrics to alert on, common-mistake audit of current config
-**Skip if:** Pool is sized correctly (60–80% utilization at peak) with no timeout errors under load
-
-> "Step 3 시작" 또는 "커넥션 풀 설정 최적화해줘"
-
----
-
-### Step 4 — Transaction Safety
-**Skill:** `transaction-boundary-reviewer`
-**Goal:** Review transaction boundaries for atomicity gaps, overly wide transactions holding locks, missing rollback declarations, and cross-service consistency patterns
-**Input:** Service and repository code; known data inconsistency symptoms; concurrent access patterns
-**Output:** ACID risk diagnosis, anti-patterns found with code evidence, corrected code with narrowed transaction scope, isolation level recommendation, Outbox/Saga pattern if cross-service
-**Skip if:** Service is read-only or all writes are single-table with no external I/O inside transactions
-
-> "Step 4 시작" 또는 "트랜잭션 경계 검토해줘"
-
----
-
-## State Tracking
-
-어느 단계에 있는지 알려주면 바로 합류합니다:
-- "커넥션 풀부터" → Step 3로 직행
-- "트랜잭션 경계만 봐줘" → Step 4로 직행
-- Skip 조건에 해당하면 자동으로 다음 단계로 안내
 
 ## What Claude Does / What You Do
 
 | Claude | You |
 |--------|-----|
-| Query rewrite, index strategy, EXPLAIN interpretation (Step 1) | Provide schema DDL and actual EXPLAIN ANALYZE output |
-| Server bottleneck analysis, parameter tuning plan (Step 2) | Apply config via parameter group or ALTER SYSTEM |
-| Pool sizing formula, HikariCP config snippet (Step 3) | Observe pool utilization under real load |
-| Transaction anti-pattern detection, corrected code (Step 4) | Confirm concurrent access patterns; test under load |
+| Picks the entry step from your quoted numbers and hands each step to its skill | Provide EXPLAIN output, pool metrics, and code |
+| Records run / skipped with the quote that justifies each | Run index DDL, `ALTER SYSTEM`, and pool changes yourself |
+| Stops at `[확인 필요]` instead of skipping | Decide which findings to apply and in what order |
 
 ## Related Skills
 
-- Individual skills: `develop:sql-pro`, `develop:database-optimizer`, `develop:connection-pool-tuner`, `develop:transaction-boundary-reviewer`
-- Before: `develop:architecture-designer` (if the DB schema itself needs redesign)
-- Adjacent: `develop:spring-boot-engineer` (for JPA / @Transactional implementation patterns)
-- After: `develop:sre-engineer` (monitoring and alerting on DB golden signals post-tuning)
+- `develop:sql-pro`, `develop:database-optimizer`, `develop:connection-pool-tuner`, `develop:transaction-boundary-reviewer` — the four steps
+- `develop:architecture-designer` — when the schema itself needs redesign
+- `develop:spring-boot-engineer` — JPA and `@Transactional` implementation
+- `develop:sre-engineer` — monitoring and alerting on DB golden signals afterward

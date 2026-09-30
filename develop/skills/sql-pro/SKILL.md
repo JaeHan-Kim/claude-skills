@@ -1,22 +1,20 @@
 ---
 name: sql-pro
 description: >-
-  Use when someone needs help writing or rewriting SQL — authoring complex
-  joins, CTEs, window functions, or recursive queries — or designing a schema
-  from scratch, normalizing an existing one, or migrating queries between
-  database dialects.
+  Use when SQL must be written, rewritten, or ported — joins, CTEs, window functions, schema design, dialect migration. Triggers: "쿼리 짜줘", "느린 쿼리 개선", "스키마 설계", "rewrite this SQL", "EXPLAIN plan".
+effort: high
 scenarios:
   - "Rewrite this slow SQL query that's doing full table scans on a 50M row table"
   - "Help me write a complex analytics query with CTEs, window functions, and aggregations"
-  - "Our report query takes 5 minutes — optimize it with proper indexing strategy"
-  - "풀 테이블 스캔을 하는 느린 쿼리를 최적화해줘"
+  - "Port this PostgreSQL query to MySQL 8"
+  - "풀 테이블 스캔을 하는 느린 쿼리를 개선해줘"
   - "윈도우 함수와 CTE를 활용한 복잡한 분석 쿼리를 작성해줘"
 compatibility:
   recommended: []
   optional:
     - think-tool
   remote_mcp_note: >-
-    think-tool이 있으면 쿼리 실행 계획 해석과 인덱스 전략 결정을 더 체계적으로 검토합니다.
+    think-tool이 있으면 실행 계획에서 병목 노드를 고르는 판단을 더 체계적으로 검토합니다.
     Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요.
 license: MIT
 metadata:
@@ -30,121 +28,49 @@ metadata:
   related-skills: devops-engineer
 ---
 
+## Standing Mandates
+
+- **Forbidden reflex:** NEVER present a rewrite or an index as faster without the user's own `EXPLAIN (ANALYZE)` before and after. A rewrite that reads faster often plans identically or worse on real cardinality, and an invented timing gets shipped as fact.
+- NEVER run DDL, or any write, against a real database without the user's explicit go — Claude prepares the statement, the user runs it. `EXPLAIN ANALYZE` on INSERT/UPDATE/DELETE executes the write: ask for a rolled-back transaction or a copy.
+- NEVER assume engine, version, schema, or a latency target. Mark `[확인 필요: 엔진/버전]`, `[확인 필요: 스키마]`, `[확인 필요: 목표 지연시간]` and stop there — dialect features and index advice change with each.
+- ALWAYS quote plan nodes and row counts from the user's output; never estimate a timing.
+- Goal: every rewritten query has the user's before/after EXPLAIN numbers, or is marked `[확인 필요]`. Stop after three optimize rounds and report what is still slow.
+
 # SQL Pro
 
-## When to Use / When Not to Use
+Writes and rewrites SQL that the user's own plan output confirms — set-based, version-aware, nothing measured by guess.
 
-**Use when:**
-- Writing or rewriting SQL queries: joins, CTEs, window functions, recursive queries
-- Designing or normalizing a schema
-- Interpreting an EXPLAIN plan for a slow query
-- Migrating SQL between PostgreSQL, MySQL, and SQL Server dialects
-
-**Do not use when:**
-- The bottleneck is server-level config (use `database-optimizer`)
-- The issue is connection pool exhaustion (use `connection-pool-tuner`)
+**Not for** server-level config (develop:database-optimizer) or pool exhaustion (develop:connection-pool-tuner).
 
 ## Process
 
-1. **Schema Analysis** — Review table structure, existing indexes, query patterns
-2. **Design** — Draft set-based operations using CTEs, window functions, appropriate joins
-3. **Version Check** — Confirm target engine and version; flag any feature requiring a minimum version
-4. **Optimize** — Analyze execution plans; implement covering indexes; eliminate table scans
-5. **Verify** — Run `EXPLAIN ANALYZE` and confirm no sequential scans on large tables; iterate until sub-100ms target is met
-6. **Document** — Provide query explanation, index rationale, performance metrics, and minimum version requirements
+1. **Intake.** Get the query, schema (tables, indexes), and engine + version. Read what is pasted or in the repo before asking; anything missing → mark it `[확인 필요: ○○]` and ask once in one line.
+2. **Design.** Draft set-based SQL: CTEs, window functions, early filters, `EXISTS` for existence checks, explicit NULL handling, no `SELECT *`, no cursor where a set works. Flag any feature that needs a minimum version. Catalog: `references/query-patterns.md`, `references/window-functions.md`, `references/quick-examples.md`; schema work: `references/database-design.md`; ports: `references/dialect-differences.md`.
+3. **Read the plan.** Ask the user for `EXPLAIN (ANALYZE, BUFFERS)` output for the original (a `psql`/`mysql` session via Bash only if the user connected one and said go). Use `think-tool`, if available, to pick the bottleneck node. Quote it. Patterns: `references/optimization.md`.
+4. **Optimize.** Propose the rewrite and covering index (`CREATE INDEX CONCURRENTLY` on PostgreSQL) as statements for the user to run. Ask for the after-plan and compare node by node. Not improved → next idea; three rounds max.
+5. **Report** per the template. Reasons for each index; engine notes; minimum versions.
 
 ## Output Template
 
-For each SQL task, provide:
-1. Optimized query with inline comments
-2. Required indexes with rationale
-3. Execution plan analysis (key patterns found)
-4. Performance metrics (before/after)
-5. Platform-specific notes if applicable
-6. Minimum version requirements (e.g., `PostgreSQL >= 10`, `MySQL >= 8.0`)
+```
+Query: <rewritten SQL with inline comments>
+Indexes: <statement — rationale> (user runs; not executed)
+Plan evidence: <quoted node and rows, before → after, or [확인 필요: EXPLAIN]>
+Notes: <dialect differences, minimum version e.g. PostgreSQL >= 10>
+Verdict: <n> queries rewritten, <n> with measured before/after, <n> marked [확인 필요]
+```
 
 ## What Claude Does / What You Do
 
 | Claude | You |
 |--------|-----|
-| Writes set-based query using CTEs or window functions | Provide sample data or schema DDL |
-| Recommends covering index strategy | Run `CREATE INDEX CONCURRENTLY` in your environment |
-| Reads EXPLAIN output and identifies plan patterns | Provide actual EXPLAIN ANALYZE output |
-| Flags dialect-specific syntax differences | Test against your actual database version |
-| Documents the before/after performance comparison | Validate with production-scale data volumes |
-
-## Reference Guide
-
-| Topic | Reference | Load When |
-|-------|-----------|-----------|
-| Query Patterns | `references/query-patterns.md` | JOINs, CTEs, subqueries, recursive queries |
-| Window Functions | `references/window-functions.md` | ROW_NUMBER, RANK, LAG/LEAD, analytics |
-| Optimization | `references/optimization.md` | EXPLAIN plans, indexes, statistics |
-| Database Design | `references/database-design.md` | Normalization, keys, constraints |
-| Dialect Differences | `references/dialect-differences.md` | PostgreSQL vs MySQL vs SQL Server |
-
-## Quick-Reference Examples
-
-### CTE Pattern
-```sql
-WITH ranked_orders AS (
-    SELECT
-        customer_id,
-        order_id,
-        total_amount,
-        ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date DESC) AS rn
-    FROM orders
-    WHERE status = 'completed'
-)
-SELECT customer_id, order_id, total_amount
-FROM ranked_orders
-WHERE rn = 1;  -- latest completed order per customer
-```
-
-### Window Function Pattern
-```sql
-SELECT
-    department_id,
-    employee_id,
-    salary,
-    SUM(salary) OVER (PARTITION BY department_id ORDER BY hire_date) AS running_payroll,
-    RANK()      OVER (PARTITION BY department_id ORDER BY salary DESC) AS salary_rank
-FROM employees;
-```
-
-### Before / After Optimization
-```sql
--- BEFORE: correlated subquery, one execution per row (slow)
-SELECT order_id,
-       (SELECT SUM(quantity) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
-FROM orders o;
-
--- AFTER: single aggregation join (fast)
-SELECT o.order_id, COALESCE(agg.item_count, 0) AS item_count
-FROM orders o
-LEFT JOIN (
-    SELECT order_id, SUM(quantity) AS item_count
-    FROM order_items
-    GROUP BY order_id
-) agg ON agg.order_id = o.id;
-```
-
-## Constraints
-
-**MUST DO:**
-- Analyze execution plans before recommending optimizations
-- Use set-based operations over row-by-row processing
-- Apply filtering early (before joins where possible)
-- Use EXISTS over COUNT for existence checks
-- Handle NULLs explicitly
-
-**MUST NOT DO:**
-- Use `SELECT *` in production queries
-- Use cursors when set-based operations work
-- Implement solutions without considering data volume and cardinality
+| Writes the set-based query and proposes the covering index | Provide schema DDL, engine + version, and the latency target |
+| Reads your EXPLAIN output and quotes the plan nodes | Run EXPLAIN ANALYZE (safely) and paste before and after |
+| Flags dialect and minimum-version differences | Run the index DDL and validate on production-scale data |
 
 ## Related Skills
 
-- `database-optimizer` — server-level tuning after the query is optimized
-- `connection-pool-tuner` — pool sizing if slow queries are exhausting connections
-- `spring-boot-engineer` — for JPA query methods and `@Query` annotations
+- `develop:database-optimizer` — server-level tuning after the query is right
+- `develop:connection-pool-tuner` — pool sizing when slow queries exhaust connections
+- `develop:transaction-boundary-reviewer` — when the trouble is write consistency, not the query
+- `develop:spring-boot-engineer` — JPA query methods and `@Query`

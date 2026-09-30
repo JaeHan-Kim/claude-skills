@@ -1,163 +1,66 @@
 ---
 name: transaction-boundary-reviewer
 description: >-
-  Use when data appears inconsistent after failures, when two writes need to
-  succeed or fail together, or when transactions are causing lock contention or
-  timeout errors under load. Reviews isolation levels, atomicity gaps, overly
-  wide...
+  Use when data is inconsistent after failures, two writes must commit or fail together, or transactions cause lock waits and timeouts. Triggers: "트랜잭션 경계", "데이터 정합성", "@Transactional 검토", "review transaction boundaries".
+effort: high
 scenarios:
   - "Data is inconsistent after failures — review our transaction boundaries"
-  - "Help me identify where distributed transactions are causing data integrity issues"
-  - "Our service has partial failure scenarios where some data commits but some doesn't"
+  - "Two writes must succeed or fail together — is this @Transactional correct?"
+  - "Our transactions hold locks and time out under load"
   - "장애 후 데이터가 불일치해 — 트랜잭션 경계를 검토해줘"
   - "분산 트랜잭션으로 인한 데이터 정합성 문제를 해결해줘"
 compatibility:
   recommended:
     - think-tool
-  optional:
-    - sequential-thinking
   remote_mcp_note: >-
-    think-tool이 있으면 동시성 이슈와 격리 수준 트레이드오프를 더 정확하게 분석합니다.
+    think-tool이 있으면 이상 현상(anomaly)을 이름 붙이고 코드 경로와 대응시키는 판단이 더 정확해집니다.
     Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요.
 ---
 
+## Standing Mandates
+
+- **Forbidden reflex:** NEVER recommend an isolation level (or `SERIALIZABLE`) before naming the specific anomaly and the code path that produces it. "Raise the isolation" as a blanket fix trades one bug for deadlocks and retries, and leaves a wide transaction or a missing lock untouched.
+- NEVER run DDL, or any write, against a real database without the user's explicit go — Claude reviews code and prepares statements (locks, `@Version` columns, outbox tables); the user runs them.
+- NEVER infer code you were not shown. Callers, propagation, proxy self-invocation, repository code, or the DB's default isolation not pasted → `[확인 필요: 호출 경로]` / `[확인 필요: 격리 수준 설정]`. A boundary guessed from method names is how a review approves a transaction that never opens.
+- ALWAYS mark engine-dependent claims (lock behaviour, phantom handling, `SELECT FOR UPDATE`) as such; defaults differ between PostgreSQL and MySQL.
+- Goal: each transaction path the user named has its at-risk ACID property and quoted evidence, or a `[확인 필요]`. Review only the paths named; list the rest as unreviewed.
+
 # Transaction Boundary Reviewer
 
-## When to Use / When Not to Use
+Finds where a transaction is too wide, too narrow, or absent — by quoting the user's code, not by prescribing a level.
 
-**Use when:**
-- Data appears inconsistent after partial failures
-- Transactions are causing lock contention or timeout errors under load
-- Two writes (possibly across services) need atomicity
-- Reviewing `@Transactional` boundaries in Spring Boot code
-
-**Do not use when:**
-- The issue is slow SQL queries (use `sql-pro`)
-- Connection pool exhaustion is the root cause (use `connection-pool-tuner`)
+**Not for** slow SQL (develop:sql-pro) or pool exhaustion as the root cause (develop:connection-pool-tuner).
 
 ## Process
 
-1. **Identify which ACID property is at risk** — Atomicity (partial writes), Isolation (concurrent anomaly), Consistency (constraint bypass), or Durability (premature ack)
-2. **Map the transaction boundary** — What code runs inside `@Transactional`? Does it include external I/O?
-3. **Check for common anti-patterns** — Wide transactions, N+1 inside transactions, missing rollbackFor, lost updates
-4. **Select isolation level** — Choose the lowest level that prevents the specific anomaly
-5. **Apply the right distributed pattern** — Outbox (event publishing), Saga (long-running flows), or pessimistic/optimistic locking
-
-For full Outbox and Saga implementations, see `references/distributed-patterns.md`.
+1. **Intake.** Get the service method and repository code for each path the user named, plus the symptom. Read the repo before asking; missing code → ask once in one line.
+2. **Name the ACID property at risk** — Atomicity, Isolation, Consistency, or Durability — and the anomaly (partial write, lost update, dirty read, …). Use `think-tool`, if available, when two anomalies fit. No anomaly nameable from the evidence → `[확인 필요]`.
+3. **Map the boundary.** What runs inside `@Transactional`? External I/O? Propagation, proxy self-invocation, `rollbackFor`. Quote each line.
+4. **Find anti-patterns** — wide transaction, N+1 inside, missing rollback, read-modify-write without lock or version, cross-service write without Outbox/Saga. Catalog, code, and tables: `references/anti-patterns.md`; Outbox and Saga code: `references/distributed-patterns.md`.
+5. **Fix.** Narrow the scope or add the lock/version; choose the lowest isolation level that prevents the named anomaly and say why. Cross-service → Outbox or Saga, with the compensation logic left to the user.
 
 ## Output Template
 
-For each review, provide:
-1. ACID property at risk (with diagnosis)
-2. Anti-patterns found (with code evidence)
-3. Corrected code or pattern
-4. Isolation level recommendation with rationale
-5. For cross-service: Outbox or Saga pattern recommendation
+```
+ACID at risk: <property> — anomaly: <name> (path: <method>)
+| # | anti-pattern | quote from your code | fix |
+Corrected: <code or pattern per row>
+Isolation: <level for the named anomaly — rationale> or none needed
+Unreviewed: <paths or [확인 필요: …]>
+Verdict: <n> anti-patterns found, <n> quoted from your code, <n> marked [확인 필요]
+```
 
 ## What Claude Does / What You Do
 
 | Claude | You |
 |--------|-----|
-| Identifies anti-patterns in the `@Transactional` scope | Provide the service method and repository code |
-| Recommends isolation level for the specific anomaly | Confirm concurrent access patterns under real load |
-| Generates corrected code with narrowed transaction scope | Test the fix under concurrent load |
-| Designs Outbox table and relay pattern | Implement and monitor the outbox relay process |
-| Templates Saga step with execute() and compensate() | Fill in the real compensation business logic |
-
-## ACID Properties Reference
-
-| Property | Means | Violated By |
-|----------|-------|-------------|
-| Atomicity | All changes commit or all roll back | Partial writes on failure |
-| Consistency | DB constraints hold before and after | Bypassing validations; wrong ordering |
-| Isolation | Concurrent transactions do not interfere | Missing locks; wrong isolation level |
-| Durability | Committed data survives crashes | Missing fsync; premature ack |
-
-## Isolation Levels
-
-| Level | Prevents | Allows | Use When |
-|-------|----------|--------|---------|
-| READ UNCOMMITTED | Nothing | Dirty reads, non-repeatable reads, phantoms | Almost never |
-| READ COMMITTED | Dirty reads | Non-repeatable reads, phantoms | Default OLTP (PostgreSQL default) |
-| REPEATABLE READ | Dirty + non-repeatable reads | Phantom reads | Financial aggregations, inventory checks |
-| SERIALIZABLE | All anomalies | — | Booking, reservation, double-spend prevention |
-
-## Common Anti-Patterns
-
-### 1. Overly Wide Transactions
-
-```java
-// Bad — HTTP call inside transaction holds locks
-@Transactional
-public void processOrder(Order order) {
-    orderRepository.save(order);
-    paymentGateway.charge(order);  // external HTTP — locks held during this!
-}
-
-// Good — database work is atomic; side effects happen after commit
-@Transactional
-public Order saveOrder(Order order) { return orderRepository.save(order); }
-
-public void processOrder(Order order) {
-    Order saved = saveOrder(order);     // transaction commits here
-    paymentGateway.charge(saved);       // no locks held
-}
-```
-
-### 2. Missing Rollback on Checked Exceptions
-
-```java
-// Bad — IOException does NOT trigger rollback in Spring by default
-@Transactional
-public void importData(File file) throws IOException { ... }
-
-// Good — explicit rollback declaration
-@Transactional(rollbackFor = IOException.class)
-public void importData(File file) throws IOException { ... }
-```
-
-### 3. Lost Update (Read Inside Write)
-
-```java
-// Bad — two threads read balance=100, both deduct 80, both save 20
-@Transactional
-public void deduct(Long accountId, BigDecimal amount) {
-    Account account = accountRepo.findById(accountId).orElseThrow();
-    account.setBalance(account.getBalance().subtract(amount));
-    accountRepo.save(account);
-}
-
-// Good — pessimistic lock (SELECT FOR UPDATE)
-@Transactional
-public void deduct(Long accountId, BigDecimal amount) {
-    Account account = accountRepo.findByIdWithLock(accountId).orElseThrow();
-    account.setBalance(account.getBalance().subtract(amount));
-    accountRepo.save(account);
-}
-```
-
-### 4. Distributed Transaction Anti-Patterns
-
-| Pattern | When to Use |
-|---------|------------|
-| Outbox | Publishing events reliably after a local commit |
-| Saga (choreography) | Long-running processes; 2–3 services |
-| Saga (orchestration) | Complex multi-step flows needing visibility; 4+ services |
-| Two-Phase Commit | Avoid; only when strong consistency is non-negotiable and you control both systems |
-
-## Review Checklist
-
-- [ ] No external I/O (HTTP, email, Kafka publish) inside database transactions
-- [ ] N+1 queries in transactions replaced with batch fetches
-- [ ] `@Transactional` `rollbackFor` covers checked exceptions that should rollback
-- [ ] Concurrent read-modify-write paths use pessimistic or optimistic locking
-- [ ] Cross-service writes use Outbox or Saga, not XA/2PC
-- [ ] Isolation level matches the anomaly being prevented
-- [ ] Transaction boundaries align with domain aggregate boundaries
+| Quotes the boundary and names the anomaly it produces | Provide service and repository code and the DB's isolation setting |
+| Proposes narrowed scope, lock, version, Outbox, or Saga | Confirm concurrent access patterns and test under load |
+| Prepares any schema statement (outbox table, version column) | Run it, implement the relay, and write the real compensation logic |
 
 ## Related Skills
 
-- `spring-boot-engineer` — for implementing the corrected `@Transactional` patterns
-- `microservices-architect` — when the issue is cross-service transaction design
-- `circuit-breaker-tuner` — wide transactions compound cascading failure risk
-- `connection-pool-tuner` — wide transactions can exhaust the connection pool
+- `develop:spring-boot-engineer` — implementing the corrected `@Transactional` patterns
+- `develop:microservices-architect` — cross-service transaction design
+- `develop:circuit-breaker-tuner` — wide transactions compound cascading failure
+- `develop:connection-pool-tuner` — wide transactions can exhaust the pool
