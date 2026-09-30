@@ -1,160 +1,66 @@
 ---
 name: service-boundary-validator
+effort: high
 description: >-
-  Use when someone is deciding whether to split a service, suspects their
-  services are too tightly coupled to deploy independently, wants to validate a
-  proposed service boundary, or is decomposing a monolith and needs to know
-  where to cut.
+  Use when deciding whether to split or merge a service, when services seem too coupled to deploy independently, or when validating a proposed boundary. Triggers: "서비스 분리", "서비스 경계 검토", "분산 모놀리스", "split this service".
 scenarios:
   - "Should this feature be a new microservice or stay in the existing service?"
   - "Validate whether our proposed service split makes sense or creates too much coupling"
-  - "Help me decide if this domain logic belongs in service A or service B"
   - "이 기능을 새 서비스로 분리해야 할지 기존 서비스에 넣어야 할지 모르겠어"
   - "서비스 경계가 맞게 나뉘어져 있는지 검토해줘"
 compatibility:
   recommended:
-    - think-tool
-    - sequential-thinking
+    - code-review-graph
   optional: []
   remote_mcp_note: >-
-    think-tool이 있으면 커플링 패턴과 팀 토폴로지 정렬을 더 깊이 분석합니다.
-    sequential-thinking은 커플링 분석 → 데이터 소유권 → 팀 정렬 → 권고 순서를 강제합니다.
+    code-review-graph가 있으면 서비스 간 호출·import 관계와 영향 범위를 코드에서 직접 뽑아 커플링 근거로 인용할 수 있습니다.
     Claude 설정 → MCP Servers에서 remote SSE 엔드포인트를 추가하세요.
 ---
 
+## Standing Mandates
+
+- **Forbidden reflex:** NEVER issue a split or merge recommendation without data-ownership evidence quoted from the code or the user's table. A boundary drawn from the service names alone splits a shared database in two, and the team ships a distributed monolith.
+- ALWAYS take the verdict from the five boundary tests, each passed or failed with a quoted fact. A narrative "looks coupled" cannot be recounted.
+- NEVER fill a cell Claude cannot see (owner team, tables written, call sites). Mark it `[확인 필요: ○○]` and ask in one line; a guessed owner flips a test.
+- ALWAYS say the recommendation is a position and what fact would overturn it. The split or merge is the user's call.
+- Goal: all five tests carry a quoted pass, fail, or `[확인 필요]`, and the verdict line recounts. One evidence pass; if a test still has no fact, report it open rather than loop.
+
 # Service Boundary Validator
 
-## When to Use / When Not to Use
+Tests whether a service boundary holds — by evidence, not by how the diagram looks.
 
-**Use when:**
-- Evaluating whether services can actually deploy independently
-- Suspecting a distributed monolith (coupled services with shared database or chatty sync calls)
-- Deciding whether to split or merge services
-- Auditing data ownership before a migration
-
-**Do not use when:**
-- Designing new boundaries from scratch — run `event-storming` first, then use `microservices-architect`
+**Not for** designing boundaries from scratch (develop:event-storming); hand the design step to develop:microservices-architect.
 
 ## Process
 
-1. **Coupling analysis** — Map synchronous call graphs, shared databases, and bidirectional dependencies
-2. **Data ownership audit** — For each entity: which service creates, reads, updates, and deletes it?
-3. **Team alignment check** — Does each service map to one team? Apply the cognitive load test.
-4. **Recommendation** — Merge / split / convert to async / fix ownership
-
-If `sequential-thinking` is available, use it to work through these four steps in order — skipping data ownership analysis before issuing a split recommendation is a high-probability, high-consequence failure.
+1. **Coupling.** Map synchronous call chains, shared databases, and bidirectional dependencies. If `code-review-graph` is available, use its graph queries (callers, imports, impact radius) on the named services and quote the edges; otherwise ask for the dependency diagram in one line. Hops over 3 in a user-facing path, any bidirectional pair, any shared schema is a red flag.
+2. **Data ownership.** For each entity: who creates, reads, updates, deletes. A writer that is not the creator is a violation. Unseen → `[확인 필요: ○○]`.
+3. **Team alignment.** One owning team per service; apply the cognitive-load question. The user states team structure.
+4. **Five tests.** Score each test in `references/boundary-catalog.md` pass / fail / `[확인 필요]` with the quoted fact.
+5. **Recommendation.** Merge, split, convert to async, or fix ownership — labelled `proposed`, with the overturning fact. Split rules and red-flag fixes are in `references/boundary-catalog.md`.
 
 ## Output Template
 
 ```
-Service: [Name]
-Owner Team: [Team name]
-Data Owned: [List of tables/entities]
-Data Read from Others: [Entity → owning service, access method]
-Synchronous Dependencies: [Service → purpose → can it be made async?]
-Events Published: [Event name → consumers]
-Events Consumed: [Event name → publisher]
-
-Red Flags Found:
-- [Specific coupling issue]
-
-Recommendation:
-- [Concrete action: merge / split / convert to async / fix ownership]
+Service: <name> · owner: <team | [확인 필요: 팀]>
+Evidence: | entity | owner | other writers | quote / source |
+Red flags: <each with quote, or "none">
+Tests: | # | test | pass / fail / [확인 필요] | fact |
+Recommendation (proposed): <action> — overturned if: <fact>
+Verdict: <n> of 5 tests failed · <n> red flags · <n> [확인 필요]
 ```
 
 ## What Claude Does / What You Do
 
 | Claude | You |
 |--------|-----|
-| Analyzes service call graph for chatty patterns | Provide the service dependency diagram or description |
-| Identifies shared database anti-patterns | Confirm which services access which tables |
-| Applies the 5 boundary tests | Validate against your team structure |
-| Runs the split decision framework | Make the final split or merge decision |
-| Drafts the coupling analysis report | Fill in actual data ownership from your codebase |
-
-## The 5 Tests for a Well-Placed Boundary
-
-A service boundary is correct only if all five hold:
-
-1. The service can be deployed independently without coordinating with other services
-2. A single team can own it without ongoing negotiation with other teams
-3. Its data is owned exclusively — no other service writes to its database tables
-4. Its domain language is consistent — terms do not shift meaning at the boundary
-5. Failure of this service degrades, but does not break, other services
-
-If any fails, the boundary is suspect.
-
-## Red Flags: Distributed Monolith Patterns
-
-### Shared Database
-
-Services A and B both write to the same schema, or A reads B's tables directly via SQL. The database becomes the integration point — schema changes require coordinating both services.
-
-**Fix:** Each service owns its data exclusively. Other services access it only through the owning service's API.
-
-### Chatty APIs (Temporal Coupling)
-
-To complete one user-facing operation, Service A makes 5+ synchronous calls to B, C, D in sequence.
-
-**Threshold:** More than 3 synchronous hops in a user-facing request path is a warning sign.
-
-**Fix options:** Merge if always called together; use async events for non-blocking workflows; BFF/API composition at the edge.
-
-### Bidirectional Dependencies
-
-Service A calls B, and B also calls A. This means deployment order is undefined and neither service is the source of truth.
-
-**Fix:** Identify the natural authority direction. Introduce an event or callback pattern if the consumer needs to communicate back.
-
-### Deployment Coupling
-
-All services must be deployed simultaneously. This reveals implicit shared contracts that change together — no deployment independence exists.
-
-**Diagnosis question:** "Can we deploy Service A on Monday and Service B the following Friday?"
-
-## Split Decision Framework
-
-```
-Should service X be split into A and B?
-
-Yes, split if:
-  - A and B are owned by different teams
-  - A and B have different deployment frequencies
-  - A and B have different scaling requirements
-  - A and B have clearly distinct ubiquitous language
-
-No, keep together if:
-  - A and B always change together
-  - A and B are always called together in every operation
-  - A and B are owned by the same team with no plans to split
-  - Splitting would create a shared database problem
-  - The split introduces a distributed transaction requirement
-```
-
-## Data Ownership Analysis
-
-```
-For each entity E:
-  1. Which service creates E? → That service owns E.
-  2. Which services read E? → They call the owning service's API or receive events.
-  3. Which services update E? → Any service other than the owner is a violation.
-  4. Which services delete E? → Same — only the owner deletes.
-```
-
-## Quick Checklist
-
-- [ ] Each service has exactly one owning team
-- [ ] No service reads another service's database directly
-- [ ] Synchronous call chains are ≤ 3 hops for user-facing requests
-- [ ] No bidirectional synchronous dependencies
-- [ ] Services can be deployed independently
-- [ ] Each service's ubiquitous language is internally consistent
-- [ ] Data ownership is unambiguous for every entity
-- [ ] Cross-service writes use events + outbox, not shared transactions
+| Pulls call and data evidence, runs the five tests, quotes each fact | Provide the dependency diagram, table access, and team structure Claude cannot see |
+| Proposes merge / split / async / ownership fix and what would overturn it | Make the final split or merge decision |
+| Marks every unseen cell `[확인 필요]` | Fill those cells from your codebase |
 
 ## Related Skills
 
-- `microservices-architect` — design new service boundaries after validation
-- `event-storming` — discover bounded contexts to inform boundary decisions
-- `transaction-boundary-reviewer` — fix cross-service transaction anti-patterns
+- `develop:microservices-architect` — design new service boundaries after validation
+- `develop:event-storming` — discover bounded contexts to inform boundary decisions
+- `develop:transaction-boundary-reviewer` — fix cross-service transaction anti-patterns
 - `write:plans` (ADR format) — document the split or merge decision
