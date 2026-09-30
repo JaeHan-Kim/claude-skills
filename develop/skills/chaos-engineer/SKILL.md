@@ -24,7 +24,7 @@ metadata:
   role: specialist
   scope: implementation
   output-format: code
-  related-skills: sre-engineer, devops-engineer, kubernetes-specialist
+  related-skills: sre-engineer
 ---
 
 ## Standing Mandates

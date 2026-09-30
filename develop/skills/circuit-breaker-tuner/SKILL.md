@@ -28,7 +28,7 @@ compatibility:
 
 A breaker that opens on a single slow call is as bad as none. Numbers come from the dependency, not from defaults.
 
-Goal: a config for each named dependency where every value has a measured basis or a `[확인 필요]` marker, plus a fallback, a bulkhead, and a state-change alert. Stop when the checklist is counted; confirmation is the user's run.
+Goal: a config for each named dependency where every value has a measured basis or a `[확인 필요]` marker, plus a fallback, a bulkhead, and a state-change alert. Stop when the basis and marker counts are recounted; confirmation is the user's run.
 
 **Not for** slow SQL or missing indexes (develop:database-optimizer), chaos experiment design (develop:chaos-engineer), pool sizing (develop:connection-pool-tuner).
 
@@ -40,7 +40,7 @@ Goal: a config for each named dependency where every value has a measured basis 
 4. **Fallback** -- What callers receive when OPEN.
 5. **Bulkhead** -- Cap concurrent calls so the pool survives before the circuit opens.
 6. **Monitoring** -- Alert on CLOSED to OPEN transitions.
-7. **Count the checklist** -- Mark each item with its evidence; hand the confirming load test to the user.
+7. **Count basis and markers** -- Recount both with the grep commands below; hand the confirming load test to the user.
 
 Starting points: 50% failure rate, `minimumNumberOfCalls` 10, wait slightly longer than downstream recovery (5-15 s fast, 60-120 s operator-driven). 4xx belong in `ignoreExceptions`; HTTP timeout must exceed `slowCallDurationThreshold`. See `references/resilience4j-config.md`, `references/fallback-patterns.md`, `references/metrics-alerting.md`.
 
@@ -55,10 +55,10 @@ Starting points: 50% failure rate, `minimumNumberOfCalls` 10, wait slightly long
 
 Checklist: `minimumNumberOfCalls` >= 10; threshold calibrated to this dependency; slow-call threshold consistent with client read timeout; open wait longer than recovery; 4xx ignored; fallback defined; bulkhead present; transition alerts wired.
 
-Tag each config value with a `# basis: <measured number>` comment; count with `grep -c '# basis:' <config file>` and quote that command, or have the user confirm the count. Never tally by re-reading the checklist.
+Tag each config value with a `# basis: <measured number>` comment; count with `grep -c '# basis:' <config file>` and quote that command, or have the user confirm the count. Count the `[확인 필요: …]` markers with `grep -c '확인 필요' <config file>` the same way. Never tally by re-reading the checklist.
 
 ```
-Verdict: N of 8 checklist items have evidence; K values marked [확인 필요]; load test run by user: no
+Verdict: N values with a # basis (grep -c '# basis:'); K values marked 확인 필요 (grep -c '확인 필요'); load test run by user: no
 ```
 
 ## What Claude Does / What You Do

@@ -24,7 +24,6 @@ metadata:
   role: specialist
   scope: implementation
   output-format: code
-  related-skills: devops-engineer, cloud-architect, kubernetes-specialist
 ---
 
 ## Standing Mandates

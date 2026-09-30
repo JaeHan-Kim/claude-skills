@@ -25,7 +25,7 @@ metadata:
   role: specialist
   scope: implementation
   output-format: code
-  related-skills: java-architect, database-optimizer, microservices-architect, devops-engineer
+  related-skills: database-optimizer, microservices-architect
 ---
 
 ## Standing Mandates

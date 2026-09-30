@@ -25,7 +25,6 @@ metadata:
   role: specialist
   scope: implementation
   output-format: code
-  related-skills: devops-engineer
 ---
 
 ## Standing Mandates

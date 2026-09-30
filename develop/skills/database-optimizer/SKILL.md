@@ -24,7 +24,6 @@ metadata:
   role: specialist
   scope: optimization
   output-format: analysis-and-code
-  related-skills: devops-engineer
 ---
 
 ## Standing Mandates

@@ -25,7 +25,6 @@ metadata:
   role: specialist
   scope: implementation
   output-format: code
-  related-skills: spec-miner, fullstack-guardian, code-reviewer
 ---
 
 ## Standing Mandates
