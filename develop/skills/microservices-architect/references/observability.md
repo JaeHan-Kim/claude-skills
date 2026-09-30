@@ -784,7 +784,7 @@ Scenario: API returning 500 errors
 
 ## Summary
 
-Observability is non-negotiable in microservices:
+Observability is required once services are split and deployed independently, since failures then cross network boundaries:
 
 **Must-Haves:**
 - Structured logging with correlation IDs

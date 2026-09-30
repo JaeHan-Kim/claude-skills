@@ -338,7 +338,7 @@ Service decomposition is both art and science. Start with domain-driven design t
 
 **Key Takeaways:**
 - Bounded contexts define service boundaries
-- Database per service is non-negotiable
+- Database per service applies only where the quoted evidence for that service shows it has to deploy and scale independently
 - Team autonomy drives service design
 - Extract incrementally, not all at once
 - Observability is prerequisite for microservices

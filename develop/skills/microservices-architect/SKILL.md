@@ -2,7 +2,7 @@
 name: microservices-architect
 effort: high
 description: >-
-  Use when designing or restructuring a distributed topology — monolith decomposition, sync vs async, resilience. Not for validating one existing split (service-boundary-validator). Triggers: "마이크로서비스 설계", "모놀리스 분해".
+  Use when splitting a monolith or re-cutting existing services — where to cut, sync vs async between the pieces, resilience at each seam. Not for validating one existing split (service-boundary-validator). Triggers: "마이크로서비스 설계", "모놀리스 분해".
 scenarios:
   - "Design a microservices architecture for our e-commerce monolith migration"
   - "Our microservices topology is tangled — restructure the communication and data design"
@@ -24,7 +24,7 @@ metadata:
   role: architect
   scope: system-design
   output-format: architecture
-  related-skills: devops-engineer, kubernetes-specialist, graphql-architect, architecture-designer, monitoring-expert
+  related-skills: architecture-designer
 ---
 
 ## Standing Mandates

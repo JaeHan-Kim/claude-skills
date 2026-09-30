@@ -705,7 +705,7 @@ result = await db_connection.query("SELECT * FROM customers WHERE id = $1", cust
 Data management in microservices requires careful design:
 
 **Key Principles:**
-- Database per service (non-negotiable)
+- Database per service where services must deploy and scale independently and the evidence for that service is quoted
 - Embrace eventual consistency where possible
 - Use Saga pattern for distributed transactions
 - Event sourcing for audit trail and temporal queries
