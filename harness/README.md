@@ -48,6 +48,7 @@ Measured on one real run the transport layer cost more than the reasoning layer
 | Take harness governance back out of a project | `remove` |
 | Cut a synchronized patch release of the harness plugin source | `patch` |
 | Delegate an Implement/Test stage to the local Codex CLI from any install layout | `codex-control` |
+| Run disjoint batches in parallel with a lead-run Test, committing each batch that passes | `light` |
 
 ## Skills
 

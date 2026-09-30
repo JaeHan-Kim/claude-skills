@@ -45,6 +45,7 @@ Plan(opus) → SetGoal(opus) → Implement(Codex 사용 시) → Test(Codex 사�
 | 프로젝트에서 하네스 거버넌스를 걷어내고 싶다 | `remove` |
 | 하네스 플러그인 소스의 패치 릴리스를 준비하고 싶다 | `patch` |
 | 설치 형태와 무관하게 Implement/Test를 로컬 Codex CLI에 위임하고 싶다 | `codex-control` |
+| 서로 겹치지 않는 배치를 병렬로 돌리고 리드가 Test를 실행해 통과한 배치마다 커밋하고 싶다 | `light` |
 
 ## 스킬
 
