@@ -29,20 +29,20 @@ A lean variant of `engine/fallback.md` for work that splits into disjoint batche
 
 ## Process
 
-1. Open the run as `fallback.md` §0 does: `RUN=.harness-run/<slug>/` and a manifest. The RUN/ artifacts are exactly fallback.md's, unchanged, so the completion check and the goal gate read them as-is.
+1. Open the run as `fallback.md` §0 does: `RUN=.harness-run/<slug>/` and a manifest that records the subgoal ids and order as `subgoals:[{"id","order"}]` (`fallback-check.mjs` reports INCOMPLETE without it). The RUN/ artifacts are exactly fallback.md's, unchanged, so the completion check and the goal gate read them as-is.
 2. Plan and SetGoal run on opus, writing `01-plan.md` and `02-goal-spec.json`.
-3. A separate critic (opus, through `think:devils-advocate`) writes `02-critique.json`, and the loop is bounded: it repeats until `sound:true` or `max_retries` rounds.
-4. Run batches in parallel only when every subgoal has `deps: []` and disjoint paths, each proven by a scope check in its `test[]`.
+3. A separate critic (opus, through `think:devils-advocate`) writes `02-critique.json`, and the loop is bounded: it repeats until `sound:true` or `max_retries` rounds. Red before green: every `test[]` must fail at the base commit; the critic runs them there and rejects any that already passes.
+4. Run batches in parallel only when every subgoal has `deps: []` and disjoint paths, each proven by a scope check in its `test[]`: owned paths per batch, pinned to the base sha, a sibling run's commit exempt by sha only.
 5. Otherwise keep fallback §3 strict linear order; light adds nothing there.
 6. Dispatch one sonnet executor per batch; each writes `impl-<n>.md` under its own `subgoals/<id>/`.
-7. The lead re-runs each batch's `test[]` itself and writes `test-<n>.json` from the output, never from the executor's narrative.
+7. The lead re-runs each batch's `test[]` itself with `RUN=<dir> python3 scripts/run_tests.py <id> [attempt]`, which writes `subgoals/<id>/test-<n>.json` from the output, never from the executor's narrative.
 8. A fresh opus gate per batch reads the spec and the diff and writes `gate-<n>.json`.
-9. On a failed gate allow one fix round, a targeted executor pass followed by steps 7 and 8 again.
+9. On a failed gate allow one fix round, a targeted executor pass followed by steps 7 and 8 again. Any edit after a gate needs a new gate on that batch, else the report says 'not re-gated'.
 10. The lead writes `subgoals/<id>/result.json` for the batch (`fallback-check.mjs` requires it), then commits a batch that passed, only its own paths.
 11. A batch whose retries are exhausted gets its `result.json` with passed false, stays uncommitted, and is reported with its last `gate-<n>.json` reason.
 12. Pin every baseline to a commit sha, never HEAD; the lead commits between batches, so HEAD moves.
 13. No test[] command may name a gated file as a literal while writing or modifying it; the hook denies those Bash commands, so a check script builds the name at runtime.
-14. Close with the goal-level gate (`04-goal-gate.json`, match_pct >= 90), `05-report.md`, then run `fallback-check.mjs` on the run directory.
+14. Close with the goal-level gate (`04-goal-gate.json`, match_pct >= 90), write `05-report.md` (the check requires it), then run `fallback-check.mjs` on the run directory; the verdict or done claim counts only once it says COMPLETE, otherwise retract it.
 
 ## Departures from fallback.md's Contract
 
