@@ -47,7 +47,7 @@ Never say publicly: internal system names, architecture-revealing errors, unconf
 |--------|------|------|
 | Rollback last deployment | Started after deploy | Low if clean |
 | Disable feature flag | Feature-specific | Low |
-| Scale out | Overload | Medium (cost) |
+| Scale out (increase replica count) | Overload | Medium (cost) |
 | Circuit breaker / shed load | Cascading failure | Medium |
 | Redirect to healthy region | Regional failure | Medium |
 | Restore from backup | Data loss/corruption | High, validate |
@@ -83,23 +83,25 @@ Never say publicly: internal system names, architecture-revealing errors, unconf
 **Status**: Draft / Final
 
 ### Summary
-What happened, user impact, how it was resolved.
+One paragraph. What happened, what was the user impact, how was it resolved.
 
 ### Timeline
 | Time (UTC) | Event |
 |------------|-------|
-| HH:MM | Alert fired / first detected |
+| HH:MM | Alert fired / issue first detected |
 | HH:MM | On-call paged |
-| HH:MM | Triage complete; severity declared |
+| HH:MM | Triage complete; P0 declared |
 | HH:MM | Root cause identified |
 | HH:MM | Mitigation applied |
-| HH:MM | Resolved |
+| HH:MM | Incident resolved |
 
 ### Root Cause
-Specific and technical. Not "human error"; explain what made the error possible.
+Specific, technical explanation. Not "human error" - explain what made the error possible.
 
 ### Contributing Factors
-- ...
+- Factor 1 (e.g., no alerting on X metric)
+- Factor 2 (e.g., runbook for this scenario was missing)
+- Factor 3 (e.g., deploy pipeline did not catch Y in staging)
 
 ### What Went Well
 - ...
@@ -107,6 +109,9 @@ Specific and technical. Not "human error"; explain what made the error possible.
 ### Action Items
 | Item | Owner | Due Date | Priority |
 |------|-------|----------|----------|
+| Add alert for X | @person | YYYY-MM-DD | High |
+| Update runbook for Y scenario | @person | YYYY-MM-DD | Medium |
+| Add canary deploy for Z service | @person | YYYY-MM-DD | High |
 ```
 
 ## When Root Cause Traces to a Product Decision

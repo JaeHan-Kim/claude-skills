@@ -113,3 +113,28 @@ Normal P99: 2s    → slowCallDurationThreshold: 4–6s
 ```
 
 Do not set this to your own SLA timeout — that is too late. The circuit should detect slowness before your timeout fires.
+
+## State Machine
+
+```
+CLOSED -> (failures exceed threshold) -> OPEN -> (wait duration) -> HALF_OPEN
+HALF_OPEN -> (probe succeeds) -> CLOSED
+HALF_OPEN -> (probe fails) -> OPEN
+```
+
+- **CLOSED**: normal operation; failures are counted.
+- **OPEN**: fail fast; calls return error or fallback at once while the downstream recovers.
+- **HALF_OPEN**: a limited number of probe calls test recovery.
+
+## Setting Each Threshold
+
+| Parameter | Lower (30-40%) | Higher (60-70%) |
+|-----------|---------------|----------------|
+| `failureRateThreshold` | Strict SLAs, high traffic, payment flows | Transient errors expected, false positives costly |
+
+Start at 50%. Tune down if the circuit fails to open when it should; tune up if it opens during brief spikes.
+
+## Common Mistakes
+
+- **`waitDurationInOpenState` too short** - circuit cycles open/probe/open without recovery
+- **Same timeout for all services** - payment and recommendation have different profiles

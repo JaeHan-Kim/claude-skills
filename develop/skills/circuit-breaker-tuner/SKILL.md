@@ -55,6 +55,8 @@ Starting points: 50% failure rate, `minimumNumberOfCalls` 10, wait slightly long
 
 Checklist: `minimumNumberOfCalls` >= 10; threshold calibrated to this dependency; slow-call threshold consistent with client read timeout; open wait longer than recovery; 4xx ignored; fallback defined; bulkhead present; transition alerts wired.
 
+Tag each config value with a `# basis: <measured number>` comment; count with `grep -c '# basis:' <config file>` and quote that command, or have the user confirm the count. Never tally by re-reading the checklist.
+
 ```
 Verdict: N of 8 checklist items have evidence; K values marked [확인 필요]; load test run by user: no
 ```

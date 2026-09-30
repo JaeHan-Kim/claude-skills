@@ -64,6 +64,8 @@ Production needs circuit breakers, feature flags, or canary isolation in place. 
 5. Learning summary with tracked improvements
 6. Verdict line
 
+The user confirms each check; Claude does not self-tally them.
+
 ```
 Verdict: N of 5 safety checks met (steady state, blast cap, rollback, single variable, go); go recorded: yes/no
 ```

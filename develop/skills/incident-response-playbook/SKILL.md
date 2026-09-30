@@ -16,7 +16,7 @@ compatibility:
 
 ## Standing Mandates
 
-- **Forbidden reflex:** NEVER open with a root-cause hunt before severity is declared and a mitigation is named; users stay down while the team investigates.
+- **Forbidden reflex:** NEVER open with a root-cause hunt before severity is declared and a mitigation is named; a past P0 stayed down 40 min while three people read logs.
 - Severity first: it sets escalation and update cadence. When in doubt, go one level higher.
 - Mitigation (restore service) and investigation (find cause) run apart; neither blocks the other.
 - Missing timeline entries, owners, or impact numbers: write `[확인 필요: ○○]`; a gap in the timeline is often the cause, so never fill it.
@@ -51,6 +51,8 @@ Escalate by handoff: DB issues to develop:database-optimizer, CPU/memory to deve
 3. Draft Slack and status updates (draft only)
 4. RCA draft in the `references/templates.md` format
 5. Verdict line
+
+Recount with `grep -c` on the saved RCA draft (`| HH:MM` rows, `[확인 필요`, `@` owners), not by re-reading the list.
 
 ```
 Verdict: severity P<n>; N of 6 RCA timeline slots filled, K marked [확인 필요]; action items with owner: M
